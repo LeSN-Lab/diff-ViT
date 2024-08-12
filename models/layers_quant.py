@@ -359,15 +359,19 @@ class PatchEmbed(nn.Module):
                  calibrate=False,
                  cfg=None):
         super().__init__()
+        # 이미지 크기와 패치 크기를 2D 튜플로 반환
+        #to_2tuple 함수는 _ntuple(2)를 호출하여 생성됩니다.
+        #이 함수는 입력이 이터러블(iterable)이 아닌 경우, 해당 값을 2번 반복하여 튜플로 만듭니다.
         img_size = to_2tuple(img_size)
         patch_size = to_2tuple(patch_size)
         self.img_size = img_size
         self.patch_size = patch_size
 
-        self.grid_size = (img_size[0] // patch_size[0],
-                          img_size[1] // patch_size[1])
-        self.num_patches = self.grid_size[0] * self.grid_size[1]
-
+        self.grid_size = (img_size[0] // patch_size[0],#224x224 크기의 이미지를 16x16크기의
+                          img_size[1] // patch_size[1]) #패치로 나누면 14x14개의 패치 그리드가 생성됨.
+        self.num_patches = self.grid_size[0] * self.grid_size[1] # 14* 14 =196 => 총 패치의 갯수.
+        #N, 3 ,224, 224가 들어가서 (16, 16) weight, (16, 16) stride가 적용되었다고 가정하면
+        #N, 768, 14, 14가 나올 것이라고 예상이 가능함.
         self.proj = QConv2d(in_chans,
                             embed_dim,
                             kernel_size=patch_size,
@@ -428,9 +432,49 @@ class PatchEmbed(nn.Module):
         assert (
             H == self.img_size[0] and W == self.img_size[1]
         ), f"Input image size ({H}*{W}) doesn't match model ({self.img_size[0]}*{self.img_size[1]})."
-        x = self.proj(x, bit_config)
+        #2D 합성곱 적용 후, flatten 및 transpose
+        """
+        flatten(2)의 의미:
+
+        flatten(start_dim=2)는 텐서의 차원 중 인덱스 2부터 끝까지의 모든 차원을 하나의 차원으로 평탄화(flatten)합니다.
+        여기서 2는 시작 차원 인덱스를 나타냅니다. (파이썬에서 인덱스는 0부터 시작)
+
+
+        연산 전후의 텐서 형태 변화:
+
+        연산 전 (Conv2D 출력): (B, C, H, W)
+
+        B: 배치 크기
+        C: 출력 채널 수 (embed_dim)
+        H: 높이
+        W: 너비
+
+
+        flatten(2) 후: (B, C, H*W)
+
+        높이와 너비 차원이 하나로 합쳐집니다.
+
+
+        transpose(1, 2) 후: (B, H*W, C)
+
+        채널 차원과 평탄화된 공간 차원의 위치가 바뀝니다.
+        """
+        x = self.proj(x, bit_config) #proj를 위해 conv2d에서 bit_finetune를 받아옴.
         B, M, H, W = x.shape
-        FLOPs.append(C*self.patch_size[0]*self.patch_size[0]*M*H*W)
+        """
+        FLOPs.append(C*self.patch_size[0]*self.patch_size[1]*M*H*W)
+        이 라인은 합성곱 연산(self.proj)의 FLOPs를 계산하여 리스트에 추가합니다.
+
+        C: 입력 채널 수
+        self.patch_size[0], self.patch_size[1]: 패치의 높이와 너비
+        M: 출력 채널 수 (embed_dim)
+        H, W: 출력 특징 맵의 높이와 너비
+
+
+        이 계산은 2D 합성곱 연산의 FLOPs를 나타냅니다. 각 출력 픽셀마다 입력 채널 * 커널 크기 * 출력 채널 만큼의 곱셈-덧셈 연산이 필요합니다.
+        FLOPs 리스트에 이 값을 추가함으로써, 모델의 다른 부분에서 전체 연산량을 집계할 수 있게 됩니다.
+        """
+        FLOPs.append(C*self.patch_size[0]*self.patch_size[0]*M*H*W) #FLOPs 계산
         x = x.flatten(2).transpose(1, 2)
         
         x = self.qact_before_norm(x)

@@ -108,10 +108,10 @@ def load_weights_from_npz(model,
         posemb = torch.cat([posemb_tok, posemb_grid], dim=1)
         return posemb
     # TODO:
-    # cached_file = _download_cached_file(url,
-    #                                     check_hash=check_hash,
-    #                                     progress=progress)
-    cached_file = '/home/chengxin/.cache/torch/hub/checkpoints/B_16-i21k-300ep-lr_0.001-aug_medium1-wd_0.1-do_0.0-sd_0.0--imagenet2012-steps_20k-lr_0.01-res_224.npz'
+    cached_file = _download_cached_file(url,
+                                        check_hash=check_hash,
+                                        progress=progress)
+    # cached_file = '/home/chengxin/.cache/torch/hub/checkpoints/B_16-i21k-300ep-lr_0.001-aug_medium1-wd_0.1-do_0.0-sd_0.0--imagenet2012-steps_20k-lr_0.01-res_224.npz'
 
     w = np.load(cached_file)
     if not prefix and 'opt/target/embedding/kernel' in w:

@@ -531,12 +531,17 @@ class VisionTransformer(nn.Module):
             #                               in_chans=in_chans,
             #                               embed_dim=embed_dim)
         num_patches = self.patch_embed.num_patches
-
+        """
+        ViT는 이미지 분류를 위해 "클래스 토큰"이라는 특별한 토큰을 추가합니다.
+        이 클래스 토큰은 패치 임베딩 시퀀스의 맨 앞에 추가됩니다.
+        최종적으로 이 클래스 토큰의 출력이 분류에 사용됩니다.
+        """
         self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
+        #위치 인코딩 설정
         self.pos_embed = nn.Parameter(
             torch.zeros(1, num_patches + 1, embed_dim))
         self.pos_drop = nn.Dropout(p=drop_rate)
-
+        #임베딩과 위치 인코딩을 위한 양자화 액티베이션 레이어
         self.qact_embed = QAct(quant=quant,
                                calibrate=calibrate,
                                bit_type=cfg.BIT_TYPE_A,
@@ -555,7 +560,7 @@ class VisionTransformer(nn.Module):
                           calibration_mode=cfg.CALIBRATION_MODE_A_LN,
                           observer_str=cfg.OBSERVER_A_LN,
                           quantizer_str=cfg.QUANTIZER_A_LN)
-
+        #transformer 블록 설정
         dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)
                ]  # stochastic depth decay rule
 
@@ -609,6 +614,12 @@ class VisionTransformer(nn.Module):
                             calibration_mode=cfg.CALIBRATION_MODE_A,
                             observer_str=cfg.OBSERVER_A,
                             quantizer_str=cfg.QUANTIZER_A)
+        #가중치 초기화.
+        """
+        pos_embed는 위치 인코딩(positional encoding)을 위한 텐서입니다.
+        평균 0, 표준편차 0.02의 절단된 정규 분포로 초기화됩니다.
+        이는 위치 정보를 미세하게 인코딩하면서도 너무 큰 값을 가지지 않도록 합니다.
+        """
         trunc_normal_(self.pos_embed, std=0.02)
         trunc_normal_(self.cls_token, std=0.02)
         self.apply(self._init_weights)
@@ -670,28 +681,30 @@ class VisionTransformer(nn.Module):
 
     def forward_features(self, x, FLOPs, global_distance, bit_config, global_plot, hessian_statistic=False):
         # B = x[0].shape[0]
-        B = x.shape[0]
+        B = x.shape[0] #배치 크기 추출
         activation = []
+        #입력 양자화
         if self.input_quant:
             x = self.qact_input(x)
-        activation.append(x)
+        activation.append(x) #입력을 양자화한 것을 activation 배열에 append.
             # print()
         # x_original = x
-        if bit_config:
+        if bit_config: #bit config가 설정되어있으면 patch_bit을 설정.
             patch_bit = bit_config[0]
         else:
             patch_bit = None
-        x = self.patch_embed(x, FLOPs, patch_bit)
+        #이미지를 패치로 분할하고 임베딩하는데 patch_bit와 FLOPs를 같이 줌.
+        x = self.patch_embed(x, FLOPs, patch_bit) 
         # y = self.patch_embed_woq(x_original[0])
         # print(out[0]==y)
-        cls_tokens = self.cls_token.expand(
-            B, -1, -1)  # stole cls_tokens impl from Phil Wang, thanks
+        cls_tokens = self.cls_token.expand( #배치크기만큼 cls_token을 확장
+            B, -1, -1)  
         # x[0] = torch.cat((cls_tokens, x[0]), dim=1)
         # x[1] = torch.cat((cls_tokens, x[1]), dim=1)
-        x = torch.cat((cls_tokens, x), dim=1)
-        x = self.qact_embed(x)
-        activation.append(x)
-        x = x + self.qact_pos(self.pos_embed)
+        x = torch.cat((cls_tokens, x), dim=1) #cls_token과 패치 임베딩을 합침.
+        x = self.qact_embed(x) #임베딩 결과를 양자화한다.
+        activation.append(x) #양자화한 것을 저장.
+        x = x + self.qact_pos(self.pos_embed) #position 정보도 같이 저장함.
         
         # out = self.qact_pos([self.pos_embed,self.pos_embed])
         # # print(out[0]==self.pos_embed)
@@ -703,13 +716,21 @@ class VisionTransformer(nn.Module):
 
         # x[0] = self.pos_drop(x[0])
         # x[1] = self.pos_drop(x[1])
-        x = self.pos_drop(x)
-
+        x = self.pos_drop(x) #드롭아웃 적용.
+        #각 블록을 순회하면서 forward 수행.
         for i, blk in enumerate(self.blocks):
             if bit_config:
+                #각 블록당 4개의 quantizer configure이 필요함.
+                """
+                Attention의 Query, Key, Value 계산을 위한 비트 수
+                Attention의 출력 프로젝션을 위한 비트 수
+                FFN(Feed-Forward Network)의 첫 번째 선형 레이어를 위한 비트 수
+                FFN의 두 번째 선형 레이어를 위한 비트 수
+                """
                 local_bit_config = bit_config[i*4+1:i*4+5]
             else:
                 local_bit_config = None
+            #이전 블록의 quantizer정보 전달.
             last_quantizer = self.qact1.quantizer if i == 0 else self.blocks[
                 i - 1].qact4.quantizer
             if i == self.depth-1 and global_plot:

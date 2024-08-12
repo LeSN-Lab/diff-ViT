@@ -37,6 +37,7 @@ class QConv2d(nn.Conv2d):
             groups=groups,
             bias=bias,
         )
+        #양자화 관련 속성 설정
         self.quant = quant
         self.calibrate = calibrate
         self.last_calibrate = last_calibrate
@@ -45,7 +46,7 @@ class QConv2d(nn.Conv2d):
         self.observer_str = observer_str
         self.quantizer_str = quantizer_str
 
-        self.module_type = 'conv_weight'
+        self.module_type = 'conv_weight' #현재 모듈 타입. conv_weight
         self.observer = build_observer(self.observer_str, self.module_type,
                                        self.bit_type, self.calibration_mode)
         self.quantizer = build_quantizer(self.quantizer_str, self.bit_type,
@@ -78,7 +79,7 @@ class QConv2d(nn.Conv2d):
                 self.dilation,
                 self.groups,
             )
-        if bit_config:
+        if bit_config: #bit config가 들어오면 quantizer와 observer의 bit type을 forward 내에서 변경하고, quantizer로 양자화를 진행하고 해당 weight로 conv2d를 진행
             bit_type = 'int' + str(bit_config)
             self.quantizer.bit_type = BIT_TYPE_DICT[bit_type]
             self.observer.bit_type = BIT_TYPE_DICT[bit_type]
@@ -157,7 +158,7 @@ class QLinear(nn.Linear):
                     # TODO:
                     self.observer.calibration_mode = 'layer_wise'
                 else: 
-                    self.observer.calibration_mode = 'channel_wise'
+                    self.observer.calibration_mode = 'channel_wise' #좀 더 낮으면 channel_wise로 변경하는듯..
                 
                 self.quantizer.observer.update(weight_smoothed)
                 self.quantizer.update_quantization_params(x, others=[self.bias], attn=attn, attn_para=attn_para)

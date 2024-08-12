@@ -33,17 +33,17 @@ parser.add_argument('--quant-method',
 parser.add_argument('--mixed', default=False, action='store_true')
 # TODO: 100 --> 32
 parser.add_argument('--calib-batchsize',
-                    default=100,
+                    default=50,
                     type=int,
                     help='batchsize of calibration set')
 parser.add_argument("--mode", default=0,
                         type=int, 
                         help="mode of calibration data, 0: PSAQ-ViT, 1: Gaussian noise, 2: Real data")
 # TODO: 10 --> 1
-parser.add_argument('--calib-iter', default=10, type=int)
+parser.add_argument('--calib-iter', default=6, type=int)
 # TODO: 100 --> 200
 parser.add_argument('--val-batchsize',
-                    default=200,
+                    default=50,
                     type=int,
                     help='batchsize of validation set')
 parser.add_argument('--num-workers',
@@ -147,55 +147,55 @@ def main():
         pin_memory=True,
         drop_last=True,
     )
-
+    mean_hessian = []
     # # TODO: Compute the hessian metrics
     if args.mixed:
         from pyhessian import hessian
         
         # # TODO:
         # #####################################################
-        # print("Calculating the sensitiveties via the averaged Hessian trace.......")
-        # batch_num = 10
-        # trace_list = []
-        # for i, (inputs, labels) in enumerate(train_loader):
-        #     hessian_comp = hessian(model,
-        #                     criterion,
-        #                     data=(inputs, labels),
-        #                     cuda=args.device)
-        #     name, trace = hessian_comp.trace()
-        #     trace_list.append(trace)
-        #     if i == batch_num - 1:
-        #         break
+        print("Calculating the sensitiveties via the averaged Hessian trace.......")
+        batch_num = 10
+        trace_list = []
+        for i, (inputs, labels) in enumerate(train_loader):
+            hessian_comp = hessian(model,
+                            criterion,
+                            data=(inputs, labels),
+                            cuda=args.device)
+            name, trace = hessian_comp.trace()
+            trace_list.append(trace)
+            if i == batch_num - 1:
+                break
     
-        # # top_eigenvalues, _ = hessian_comp.eigenvalues()
-        # # trace = hessian_comp.trace()
-        # # density_eigen, density_weight = hessian_comp.density()
-        # # print('\n***Top Eigenvalues: ', top_eigenvalues)
+        # top_eigenvalues, _ = hessian_comp.eigenvalues()
+        # trace = hessian_comp.trace()
+        # density_eigen, density_weight = hessian_comp.density()
+        # print('\n***Top Eigenvalues: ', top_eigenvalues)
 
-        # new_global_hessian_track = []
-        # for i in range(int(len(trace_list))):
-        #     hessian_track = trace_list[i]
-        #     hessian_track = [abs(x) for x in hessian_track]
-        #     min_h = min(hessian_track)
-        #     max_h = max(hessian_track)
-        #     averaged_hessian_track = [(elem-min_h)/(max_h-min_h) for elem in hessian_track]
-        #     new_global_hessian_track.append(averaged_hessian_track)
+        new_global_hessian_track = []
+        for i in range(int(len(trace_list))):
+            hessian_track = trace_list[i]
+            hessian_track = [abs(x) for x in hessian_track]
+            min_h = min(hessian_track)
+            max_h = max(hessian_track)
+            averaged_hessian_track = [(elem-min_h)/(max_h-min_h) for elem in hessian_track]
+            new_global_hessian_track.append(averaged_hessian_track)
 
-        # mean_hessian = []
-        # # min_hessian = []
-        # # max_hessian = []
-        # layer_num = len(trace_list[0])
-        # for i in range(layer_num):
-        #     new_hessian = [sample[i] for sample in new_global_hessian_track]
-        #     mean_hessian.append(sum(new_hessian)/len(new_hessian))
-        #     # min_hessian.append(min(new_hessian))
-        #     # max_hessian.append(max(new_hessian))
+        
+        # min_hessian = []
+        # max_hessian = []
+        layer_num = len(trace_list[0])
+        for i in range(layer_num):
+            new_hessian = [sample[i] for sample in new_global_hessian_track]
+            mean_hessian.append(sum(new_hessian)/len(new_hessian))
+            # min_hessian.append(min(new_hessian))
+            # max_hessian.append(max(new_hessian))
 
-        # print(name)
-        # print('\n***Trace: ', mean_hessian)
+        print(name)
+        print('\n***Trace: ', mean_hessian)
     # # exit()
     # ################ deit-base ################
-    mean_hessian = [0.1728846995274323, 0.5223890107224295, 0.8191925959786669, 0.7076886016952384, 0.024708840222082775, 0.06145297177505395, 0.13322631271040494, 0.06554926888319061, 0.06175339225459908, 0.030678026107910893, 0.24494822213016829, 0.06636346426025085, 0.15758525560166742, 0.04395577998269693, 0.14552961945368617, 0.060864547749392026, 0.08752683209414383, 0.05799105819299426, 0.22538750132546922, 0.06785646981946868, 0.07478358821405745, 0.036487501147269154, 0.07572471890381866, 0.04584776940321937, 0.0906965395135412, 0.052852272764886334, 0.07057863784461312, 0.054111013841287636, 0.10702172109786383, 0.06730713583013927, 0.15666245711129553, 0.062172999291384645, 0.14509012240011504, 0.091604835756826, 0.2623722516111311, 0.06393236780883862, 0.11330756525833534, 0.0961950553973105, 0.18536753690007585, 0.09250514367800573, 0.11291326692010435, 0.09088161815323087, 0.08509066277645735, 0.19602731888893016, 0.05031627704809997, 0.06092669320490903, 0.23648108326696252, 0.07698688576427923, 0.37813159586619466]
+    # mean_hessian = [0.1728846995274323, 0.5223890107224295, 0.8191925959786669, 0.7076886016952384, 0.024708840222082775, 0.06145297177505395, 0.13322631271040494, 0.06554926888319061, 0.06175339225459908, 0.030678026107910893, 0.24494822213016829, 0.06636346426025085, 0.15758525560166742, 0.04395577998269693, 0.14552961945368617, 0.060864547749392026, 0.08752683209414383, 0.05799105819299426, 0.22538750132546922, 0.06785646981946868, 0.07478358821405745, 0.036487501147269154, 0.07572471890381866, 0.04584776940321937, 0.0906965395135412, 0.052852272764886334, 0.07057863784461312, 0.054111013841287636, 0.10702172109786383, 0.06730713583013927, 0.15666245711129553, 0.062172999291384645, 0.14509012240011504, 0.091604835756826, 0.2623722516111311, 0.06393236780883862, 0.11330756525833534, 0.0961950553973105, 0.18536753690007585, 0.09250514367800573, 0.11291326692010435, 0.09088161815323087, 0.08509066277645735, 0.19602731888893016, 0.05031627704809997, 0.06092669320490903, 0.23648108326696252, 0.07698688576427923, 0.37813159586619466]
     # ################ deit-tiny ################
     # mean_hessian = [0.12777249535991195, 0.3047042506776798, 0.6836076810672933, 0.9160977695613777, 0.051443724472863196, 0.1917038465654385, 0.40636168841774706, 0.31831214126540874, 0.17167878599488856, 0.17040465195968652, 0.5848568924580573, 0.34105575377627256, 0.2250203702397191, 0.24419067521700116, 0.5773478063329939, 0.33414308463155074, 0.25956759388373196, 0.1395379949578424, 0.4314355169808728, 0.22188267697321334, 0.1817366766340382, 0.11851699436886039, 0.4161464737579431, 0.19327061829322395, 0.17012293934278208, 0.12277515606872576, 0.4558816353483174, 0.15589752294249398, 0.17898296918815426, 0.086547094124963, 0.3467772011352197, 0.08775692025611888, 0.15284702235308084, 0.10833365447369167, 0.25759808027283065, 0.08692103455348514, 0.10185882004871938, 0.06342371816526218, 0.0780091910106661, 0.03666006418635352, 0.11141181591383327, 0.035333162826754756, 0.09242800375426533, 0.06258579742709644, 0.16515551045287732, 0.017525156872452197, 0.13652986573803982, 0.12360630901916989, 0.5199713391368654]
     #####################################################
@@ -261,23 +261,33 @@ def main():
         bit_list = []
         # model size constraint
         # TODO:
+        # 모델 크기 제약 설정(논문의 Section III-D 에서 언급된 모델 크기 제약)
+        #모든 레이어의 부동 소수점 연산에 대해 4bit의 연산을 한다고 했을때 1.1배까지를 제약조건으로 한다.
         model_constraint = 1.1*sum([FLOPs[i]*4 for i in range(len(FLOPs))])
+        
         for i in range(2**len(global_distance)):
             # bit_config = [random.choice([torch.Tensor([4]).cuda(),torch.Tensor([8]).cuda()]) for i in range(len(FLOPs))]
             # TODO:
-            bit_choice = [4,8]
+            bit_choice = [4,8] #4bit와 8bit 중 선택(논문의 Section III-D에서 언급된 비트 선택
             # bit_config = [random.choice(bit_choice) for i in range(len(FLOPs))]
+            
+            #전체 레이어 수의 절반에서 1을 뺸 만큼의 비트 설정을 랜덤하게 설정한다. 
             bit_config = [random.choice(bit_choice) for i in range(len(FLOPs)//2-1)]
+            
+            #첫번째 레이어에는 최대 비트수(8)을 할당한다. 위의 랜덤 비트 설정을 두배로 확장한 후 추가한다.
             new_bit_config = [max(bit_choice)] + [bit for bit in bit_config for i in range(2)] + [random.choice(bit_choice)]
             # new_bit_config = [7] + [bit for bit in bit_config for i in range(2)] + [6]
+            #각 레이어의 FLOPs와 비트 설정을 곱한 후 모델 크기를 계산한다.
             model_size = sum([FLOPs[i]*new_bit_config[i] for i in range(len(FLOPs))])
             # FIXME:
+            #model size가 제약조건을 넘지 않고, bit_list에 없는 경우 bit_list에 추가한다. -> 이러한 랜덤 bit 설정을 50개까지 생성한다.
             if not model_size > model_constraint and new_bit_config not in bit_list:
                 bit_list.append(new_bit_config)
             if len(bit_list) > 50:
                 break
         
         # compute the omega 
+        #Hessian 기반 비용 계산(논문의 section III-D에서 언급된 Hessian 기반 민감도 측정.
         omega_list = []
         for bit_config in bit_list:
             select_diastance = []
@@ -286,7 +296,8 @@ def main():
                     continue
                 for k, choice in enumerate(bit_choice):
                     if choice == bit:
-                        select_diastance.append(global_distance[i-1][k])
+                        #global distance에서 각 레이어의 거리를 구하는데 4bit와 8bit의 거리중 선택된 거리를 불러온다.
+                        select_diastance.append(global_distance[i-1][k]) 
                         break
                 # if bit == 4:
                 #     select_diastance.append(global_distance[i][0])
@@ -300,6 +311,7 @@ def main():
                 #     assert bit == 4 or bit == 6 or bit == 8
             # TODO:
             # omega = [(mean_hessian[i]+sita_hessian[i])*select_diastance[i] for i in range(len(FLOPs))]
+            #총 비용 omega를 계산한다. 
             omega = [mean_hessian[i]*select_diastance[i] for i in range(len(FLOPs)-1)]
             omega_list.append([bit_config, sum(omega)])
         
@@ -307,6 +319,7 @@ def main():
         omega_list.sort(key = lambda x : x[-1])
         #####################################################
         print('Hessien-Based Validating...')
+        #상위 5개의 구성에 대해 검증을 수행한다.
         for i in range(5):
             # FIXME:
             bit_config = omega_list[i][0]
@@ -325,29 +338,38 @@ def main():
         # exit()
 
         # ####################### Evolutionary search ###################
+        # 진화 알고리즘 초기화
         print('Start Evolutionary.......')
-        parent_popu = []
-        pop_size = 25
-        evo_iter = 8
-        mutate_size = 10
-        mutate_prob = 0.5
-        crossover_size = 10
-        crossover_prob = 0.5
-        for i in range(pop_size):
-            bit_config = omega_list[i][0]
-            val_loss, val_prec1, val_prec5 = validate(args, val_loader, model,
-                                                criterion, device, bit_config)
-            parent_popu.append([bit_config, val_prec1])
-        parent_popu.sort(key = lambda x : x[-1], reverse=True)
+        parent_popu = []#부모 집단을 저장할 리스트.
+        pop_size = 25   #집단 크기
+        evo_iter = 8    #evolution iteration
+        mutate_size = 10#돌연변이 연산으로 생성할 자식의 수
+        mutate_prob = 0.5#각 비트가 돌연변이 될 확률
+        crossover_size = 10 #교차 연산으로 생성할 자식 수
+        crossover_prob = 0.5#교차 시 각 비트가 첫 번째 부모에서 올 확률
         
+        #초기 부모 집단 생성
+        for i in range(pop_size):
+            bit_config = omega_list[i][0] #Hessian 기반 검색 결과에서 최상위 비트 구성을 가져온다.
+            val_loss, val_prec1, val_prec5 = validate(args, val_loader, model,
+                                                criterion, device, bit_config) #해당 결과에 대해 검증을 수행한다.
+            parent_popu.append([bit_config, val_prec1]) #해당 비트 구성과 정확도를 저장한다.
+        parent_popu.sort(key = lambda x : x[-1], reverse=True) #정확도 기준으로 내림차순으로 정렬한다.
+        
+        
+        #진화를 반복한다.
         for evo in range(evo_iter):                                      
-            # mutate
+            # 돌연변이(논문의 Section III-D에서 언급된 mutaitin 연산)
             children_list =[]
             mutate_bit_list =[]
             while True:
-                old_bit = random.choice(parent_popu)[0]
+                old_bit = random.choice(parent_popu)[0]#현재 저장된 부모의 리스트에서 랜덤하게 선택한다.
+                
+                #old bi list에서 각 bit당 mutation 확률을 넘지 못하면 그대로 두고, 넘으면 랜덤하게 선택해서 변이를 한다.
                 new_bit = [bit if random.random() < mutate_prob else random.choice(bit_choice) for bit in old_bit]
-                model_size = sum([FLOPs[i]*new_bit[i] for i in range(len(FLOPs))])
+                
+                #그렇게 비트구성을 변이시켰을 때 model constraint를 넘는가. 그리고 중복된 비트구성인가.
+                model_size = sum([FLOPs[i]*new_bit[i] for i in range(len(FLOPs))]) 
                 if not model_size > model_constraint and new_bit not in mutate_bit_list:
                     val_loss, val_prec1, val_prec5 = validate(args, val_loader, model,
                                                 criterion, device, new_bit)
@@ -359,11 +381,15 @@ def main():
             # crossover
             crossover_bit_list =[]
             while True:
-                old_bit_1 = random.choice(parent_popu)[0]
-                old_bit_2 = random.choice(parent_popu)[0]
-                if old_bit_1 == old_bit_2:
+                old_bit_1 = random.choice(parent_popu)[0] #부모 집단에서 랜덤하게  첫번째 부모를 선택한다.
+                old_bit_2 = random.choice(parent_popu)[0] #부모 집단에서 랜덤하게 두번째 부모를 선택한다.
+                if old_bit_1 == old_bit_2: #만약 우연찮게 같은 부모를 선택했다면 다시 선택한다.
                     continue
+                
+                # 각 비트에 대해 crossover 확률을 넘으면 첫번째부모, 넘지 못하면 두번째 부모에서 비트를 선택한다.
                 new_bit = [bit1 if random.random() < crossover_prob else bit2 for (bit1, bit2) in zip(old_bit_1, old_bit_2)]
+                
+                #그렇게 선택해서 비트를 구성했을 때 모델 크기를 넘지 않고, 중복된 비트 구성이 아닌 경우
                 model_size = sum([FLOPs[i]*new_bit[i] for i in range(len(FLOPs))])
                 if not model_size > model_constraint and new_bit not in crossover_bit_list:
                     val_loss, val_prec1, val_prec5 = validate(args, val_loader, model,
@@ -375,6 +401,7 @@ def main():
             
             # updation
             for child in children_list:
+                #자식들이 저장된 리스트에서 부모 리스트와 비교하여 부모의 최저 정확도보다 높은 경우 부모 리스트에 추가한다.
                 if child[1] > parent_popu[-1][1]:
                     parent_popu.append(child)
 
