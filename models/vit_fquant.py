@@ -81,7 +81,7 @@ class Attention(nn.Module):
                            bit_type=cfg.BIT_TYPE_W,
                            calibration_mode=cfg.CALIBRATION_MODE_W,
                            observer_str=cfg.OBSERVER_W,
-                           quantizer_str=cfg.QUANTIZER_W)  
+                           quantizer_str=cfg.QUANTIZER_W)
         # self.qacts = QAct(quant=quant,
         #                   calibrate=calibrate,
         #                   bit_type=cfg.BIT_TYPE_A,
