@@ -1,66 +1,24 @@
 import argparse
-import math
 import os
-import time
-import random
-import torch.nn.functional as F
-
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torchvision.datasets as datasets
 import torchvision.transforms as transforms
-from PIL import Image
-
-from config import Config
-from models import *
-from generate_data import generate_data
+from torch.quantization import quantize_dynamic, quantize_jit, get_default_qconfig, prepare
+from torch.utils.data import DataLoader
 import numpy as np
 
-parser = argparse.ArgumentParser(description='FQ-ViT')
+from config import Config
+from models import *  # 원본 코드에서 사용된 모델 import
 
-parser.add_argument('--model',
-                    choices=[
-                        'deit_tiny', 'deit_small', 'deit_base', 'vit_base',
-                        'vit_large', 'swin_tiny', 'swin_small', 'swin_base'
-                    ],
-                    default='deit_tiny',
-                    help='model')
-parser.add_argument('--data', metavar='DIR',
-                    default='/home/jieungkim/quantctr/imagenet',
-                    help='path to dataset')
-parser.add_argument('--quant', default=True, action='store_true')
-parser.add_argument('--ptf', default=True)
-parser.add_argument('--lis', default=True)
-parser.add_argument('--quant-method',
-                    default='minmax',
-                    choices=['minmax', 'ema', 'omse', 'percentile'])
-parser.add_argument('--mixed', default=False, action='store_true')
-# TODO: 100 --> 32
-parser.add_argument('--calib-batchsize',
-                    default=50,
-                    type=int,
-                    help='batchsize of calibration set')
-parser.add_argument("--mode", default=0,
-                        type=int, 
-                        help="mode of calibration data, 0: PSAQ-ViT, 1: Gaussian noise, 2: Real data")
-# TODO: 10 --> 1
-parser.add_argument('--calib-iter', default=10, type=int)
-# TODO: 100 --> 200
-parser.add_argument('--val-batchsize',
-                    default=50,
-                    type=int,
-                    help='batchsize of validation set')
-parser.add_argument('--num-workers',
-                    default=16,
-                    type=int,
-                    help='number of data loading workers (default: 16)')
+parser = argparse.ArgumentParser(description='PyTorch Quantization and Model Difference Analysis')
+parser.add_argument('model', choices=['deit_tiny', 'deit_small', 'deit_base', 'vit_base', 'vit_large', 'swin_tiny', 'swin_small', 'swin_base'], help='model')
+parser.add_argument('data', metavar='DIR', help='path to dataset')
+parser.add_argument('--calib-iter', default=10, type=int, help='number of calibration iterations')
+parser.add_argument('--val-batchsize', default=50, type=int, help='batchsize of validation set')
+parser.add_argument('--num-workers', default=16, type=int, help='number of data loading workers (default: 16)')
 parser.add_argument('--device', default='cuda', type=str, help='device')
-parser.add_argument('--print-freq',
-                    default=100,
-                    type=int,
-                    help='print frequency')
-parser.add_argument('--seed', default=0, type=int, help='seed')
-
 
 def str2model(name):
     d = {
@@ -76,398 +34,271 @@ def str2model(name):
     print('Model: %s' % d[name].__name__)
     return d[name]
 
-
-def seed(seed=0):
-    import os
-    import random
-    import sys
-
-    import numpy as np
-    import torch
-    sys.setrecursionlimit(100000)
-    os.environ['PYTHONHASHSEED'] = str(seed)
-    os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    torch.backends.cudnn.benchmark = False
-    torch.backends.cudnn.deterministic = True
-    np.random.seed(seed)
-    random.seed(seed)
-    
-class AverageMeter(object):
-    """Computes and stores the average and current value"""
-
-    def __init__(self):
-        self.reset()
-
-    def reset(self):
-        self.val = 0
-        self.avg = 0
-        self.sum = 0
-        self.count = 0
-
-    def update(self, val, n=1):
-        self.val = val
-        self.sum += val * n
-        self.count += n
-        self.avg = self.sum / self.count
-def accuracy(output, target, topk=(1, )):
-    """Computes the precision@k for the specified values of k"""
-    maxk = max(topk)
-    batch_size = target.size(0)
-
-    _, pred = output.topk(maxk, 1, True, True)
-    pred = pred.t()
-    correct = pred.eq(target.reshape(1, -1).expand_as(pred))
-
-    res = []
-    for k in topk:
-        correct_k = correct[:k].reshape(-1).float().sum(0)
-        res.append(correct_k.mul_(100.0 / batch_size))
-    return res
-
-
-def build_transform(input_size=224,
-                    interpolation='bicubic',
-                    mean=(0.485, 0.456, 0.406),
-                    std=(0.229, 0.224, 0.225),
-                    crop_pct=0.875):
-
-    def _pil_interp(method):
-        if method == 'bicubic':
-            return Image.BICUBIC
-        elif method == 'lanczos':
-            return Image.LANCZOS
-        elif method == 'hamming':
-            return Image.HAMMING
-        else:
-            return Image.BILINEAR
-
-    resize_im = input_size > 32
+def build_transform(input_size=224, interpolation='bicubic', mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225), crop_pct=0.875):
     t = []
-    if resize_im:
-        size = int(math.floor(input_size / crop_pct))
-        ip = _pil_interp(interpolation)
-        t.append(
-            transforms.Resize(
-                size,
-                interpolation=ip),  # to maintain same ratio w.r.t. 224 images
-        )
-        t.append(transforms.CenterCrop(input_size))
-
+    t.append(transforms.Resize(int(input_size / crop_pct), interpolation=transforms.InterpolationMode.BICUBIC))
+    t.append(transforms.CenterCrop(input_size))
     t.append(transforms.ToTensor())
     t.append(transforms.Normalize(mean, std))
     return transforms.Compose(t)
-def validate(args, val_loader, model, criterion, device, bit_config=None):
-    batch_time = AverageMeter()
-    losses = AverageMeter()
-    top1 = AverageMeter()
-    top5 = AverageMeter()
 
-    # switch to evaluate mode
-    model.eval()
+def hook_fn(name, model_outputs):
+    def hook(module, input, output):
+        model_outputs[name] = output
+    return hook
 
-    val_start_time = end = time.time()
-    for i, (data, target) in enumerate(val_loader):
-        data = data.to(device)
-        target = target.to(device)
-        if i == 0:
-            plot_flag = False
-        else:
-            plot_flag = False
-        with torch.no_grad():
-            output, FLOPs, distance = model(data, bit_config, plot_flag)
-        loss = criterion(output, target)
+def add_hooks(model, model_outputs):
+    # Input quantization
+    model.qact_input.register_forward_hook(hook_fn("qact_input", model_outputs))
+    
+    # Patch Embedding
+    model.patch_embed.register_forward_hook(hook_fn("patch_embed", model_outputs))
+    model.patch_embed.qact.register_forward_hook(hook_fn("patch_embed_qact", model_outputs))
+    
+    # Position Embedding
+    model.pos_drop.register_forward_hook(hook_fn("pos_drop", model_outputs))
+    model.qact_embed.register_forward_hook(hook_fn("qact_embed", model_outputs))
+    model.qact_pos.register_forward_hook(hook_fn("qact_pos", model_outputs))
+    
+    # Transformer Blocks
+    for i, block in enumerate(model.blocks):
+        block.norm1.register_forward_hook(hook_fn(f"block_{i}_norm1", model_outputs))
+        block.attn.qkv.register_forward_hook(hook_fn(f"block_{i}_attn_qkv", model_outputs))
+        block.attn.proj.register_forward_hook(hook_fn(f"block_{i}_attn_proj", model_outputs))
+        block.attn.qact3.register_forward_hook(hook_fn(f"block_{i}_attn_qact3", model_outputs))
+        block.qact2.register_forward_hook(hook_fn(f"block_{i}_qact2", model_outputs))
+        block.norm2.register_forward_hook(hook_fn(f"block_{i}_norm2", model_outputs))
+        block.mlp.fc1.register_forward_hook(hook_fn(f"block_{i}_mlp_fc1", model_outputs))
+        block.mlp.fc2.register_forward_hook(hook_fn(f"block_{i}_mlp_fc2", model_outputs))
+        block.mlp.qact2.register_forward_hook(hook_fn(f"block_{i}_mlp_qact2", model_outputs))
+        block.qact4.register_forward_hook(hook_fn(f"block_{i}_qact4", model_outputs))
+    
+    # Final Norm Layer
+    model.norm.register_forward_hook(hook_fn("final_norm", model_outputs))
+    model.qact2.register_forward_hook(hook_fn("final_qact2", model_outputs))
+    
+    # Classifier Head
+    model.head.register_forward_hook(hook_fn("head", model_outputs))
+    model.act_out.register_forward_hook(hook_fn("act_out", model_outputs))
 
-        # measure accuracy and record loss
-        prec1, prec5 = accuracy(output.data, target, topk=(1, 5))
-        losses.update(loss.data.item(), data.size(0))
-        top1.update(prec1.data.item(), data.size(0))
-        top5.update(prec5.data.item(), data.size(0))
+def compute_ddv(model, normal_inputs, adv_inputs, outputs):
+    def forward_and_get_outputs(inputs):
+        model_output = model(inputs)
+        if isinstance(model_output, tuple):
+            model_output = model_output[0]
+        return {k: v.clone() for k, v in outputs.items()}
+    
+    normal_outputs = forward_and_get_outputs(normal_inputs)
+    adv_outputs = forward_and_get_outputs(adv_inputs)
+    
+    # print(normal_outputs.keys())
+    # print(adv_outputs.keys())
+    model_ddv_dict = {}
+    for key in normal_outputs.keys():
+        normal_layer_output = normal_outputs[key]
+        adv_layer_output = adv_outputs[key]
+        
+        ddv = []
+        for ya, yb in zip(normal_layer_output, adv_layer_output):
+            ya = ya.detach().cpu().numpy().flatten()
+            yb = yb.detach().cpu().numpy().flatten()
+            ya = ya / np.linalg.norm(ya)
+            yb = yb / np.linalg.norm(yb)
+            cos_similarity = np.dot(ya, yb)
+            ddv.append(cos_similarity)
+        
+        ddv = np.array(ddv)
+        norm = np.linalg.norm(ddv)
+        if norm != 0:
+            ddv = ddv / norm
+        model_ddv_dict[key] = ddv
+    
+    return model_ddv_dict
 
-        # measure elapsed time
-        batch_time.update(time.time() - end)
-        end = time.time()
+def calculate_and_print_similarities(source_ddv, target_ddv):
+    for key in source_ddv.keys():
+        source_layer = source_ddv[key]
+        target_layer = target_ddv[key]
+        
+        similarities = []
+        for ya, yb in zip(source_layer, target_layer):
+            ya = ya / np.linalg.norm(ya)
+            yb = yb / np.linalg.norm(yb)
+            cos_similarity = np.dot(ya, yb) * 100
+            similarities.append(cos_similarity)
+        
+        avg_similarity = np.mean(similarities)
+        print(f"{key} layer similarity: {avg_similarity:.2f}%")
 
-        if i % args.print_freq == 0:
-            print('Test: [{0}/{1}]\t'
-                  'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
-                  'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
-                  'Prec@1 {top1.val:.3f} ({top1.avg:.3f})\t'
-                  'Prec@5 {top5.val:.3f} ({top5.avg:.3f})'.format(
-                      i,
-                      len(val_loader),
-                      batch_time=batch_time,
-                      loss=losses,
-                      top1=top1,
-                      top5=top5,
-                  ))
-    val_end_time = time.time()
-    print(' * Prec@1 {top1.avg:.3f} Prec@5 {top5.avg:.3f} Time {time:.3f}'.
-          format(top1=top1, top5=top5, time=val_end_time - val_start_time))
+def get_seed_inputs(args, n=50):
+    model_type = args.model.split('_')[0]
+    if model_type == 'deit':
+        mean, std, crop_pct = (0.485, 0.456, 0.406), (0.229, 0.224, 0.225), 0.875
+    elif model_type == 'vit':
+        mean, std, crop_pct = (0.5, 0.5, 0.5), (0.5, 0.5, 0.5), 0.9
+    elif model_type == 'swin':
+        mean, std, crop_pct = (0.485, 0.456, 0.406), (0.229, 0.224, 0.225), 0.9
+    else:
+        raise NotImplementedError
 
-    return losses.avg, top1.avg, top5.avg
-
-args = parser.parse_args(args=[])
-seed(args.seed)
-
-device = torch.device(args.device)
-cfg = Config(args.ptf, args.lis, args.quant_method)
-model = str2model(args.model)(pretrained=True, cfg=cfg)
-model = model.to(device)
-
-# Note: Different models have different strategies of data preprocessing.
-model_type = args.model.split('_')[0]
-if model_type == 'deit':
-    mean = (0.485, 0.456, 0.406)
-    std = (0.229, 0.224, 0.225)
-    crop_pct = 0.875
-elif model_type == 'vit':
-    mean = (0.5, 0.5, 0.5)
-    std = (0.5, 0.5, 0.5)
-    crop_pct = 0.9
-elif model_type == 'swin':
-    mean = (0.485, 0.456, 0.406)
-    std = (0.229, 0.224, 0.225)
-    crop_pct = 0.9
-else:
-    raise NotImplementedError
-train_transform = build_transform(mean=mean, std=std, crop_pct=crop_pct)
-val_transform = build_transform(mean=mean, std=std, crop_pct=crop_pct)
-
-# Data
-traindir = os.path.join(args.data, 'train')
-valdir = os.path.join(args.data, 'val')
-
-val_dataset = datasets.ImageFolder(valdir, val_transform)
-val_loader = torch.utils.data.DataLoader(
-    val_dataset,
-    batch_size=args.val_batchsize,
-    shuffle=False,
-    num_workers=args.num_workers,
-    pin_memory=True,
-)
-# switch to evaluate mode
-model.eval()
-
-# define loss function (criterion)
-criterion = nn.CrossEntropyLoss().to(device)
-
-train_dataset = datasets.ImageFolder(traindir, train_transform)
-train_loader = torch.utils.data.DataLoader(
-    train_dataset,
-    batch_size=10,
-    shuffle=True,
-    num_workers=args.num_workers,
-    pin_memory=True,
-    drop_last=True,
-)
-
-if args.quant:
-        # TODO:
-        # Get calibration set
-        # Case 0: PASQ-ViT
-        if args.mode == 2:
-            print("Generating data...")
-            calibrate_data = generate_data(args)
-            print("Calibrating with generated data...")
-            model.model_open_calibrate()
-            with torch.no_grad():
-                model.model_open_last_calibrate()
-                output = model(calibrate_data)
-        # Case 1: Gaussian noise
-        elif args.mode == 1:
-            calibrate_data = torch.randn((args.calib_batchsize, 3, 224, 224)).to(device)
-            print("Calibrating with Gaussian noise...")
-            model.model_open_calibrate()
-            with torch.no_grad():
-                model.model_open_last_calibrate()
-                output = model(calibrate_data)
-        # Case 2: Real data (Standard)
-        elif args.mode == 0:
-            # Get calibration set.
-            image_list = []
-            # output_list = []
-            for i, (data, target) in enumerate(train_loader):
-                if i == args.calib_iter:
-                    break
-                data = data.to(device)
-                # target = target.to(device)
-                image_list.append(data)
-                # output_list.append(target)
-
-            print("Calibrating with real data...")
-            model.model_open_calibrate()
-            with torch.no_grad():
-                # TODO:
-                # for i, image in enumerate(image_list):
-                #     if i == len(image_list) - 1:
-                #         # This is used for OMSE method to
-                #         # calculate minimum quantization error
-                #         model.model_open_last_calibrate()
-                #     output, FLOPs, global_distance = model(image, plot=False)
-                # model.model_quant(flag='off')
-                model.model_open_last_calibrate()
-                output, FLOPs, global_distance = model(image_list[0], plot=False)
-
-        model.model_close_calibrate()
-        model.model_quant()
-
-
-#사용자 정의 손실 함수.
-def myloss(yhat, y):
-    # 첫 번째 클래스와 나머지 클래스 사이의 차이를 최대화하는 손실 함수
-    # 이는 adversarial 예제의 다양성을 증가시키는 데 도움이 됩니다.
-    return -((yhat[:,0]-y[:,0])**2 + 0.1*((yhat[:,1:]-y[:,1:])**2).mean(1)).mean()
+    train_transform = build_transform(mean=mean, std=std, crop_pct=crop_pct)
+    traindir = os.path.join(args.data, 'train')
+    train_dataset = datasets.ImageFolder(traindir, train_transform)
+    train_loader = DataLoader(train_dataset, batch_size=n, shuffle=True, num_workers=args.num_workers, pin_memory=True, drop_last=True)
+    
+    images, labels = next(iter(train_loader))
+    return images.to(args.device), labels.to(args.device)
 
 class AttackPGD(nn.Module):
-    def __init__(self, basic_net, epsilon, step_size, num_steps, bit_config):
+    def __init__(self, basic_net, epsilon, step_size, num_steps):
         super(AttackPGD, self).__init__()
         self.basic_net = basic_net
         self.step_size = step_size
         self.epsilon = epsilon
         self.num_steps = num_steps
-        self.bit_config = bit_config
 
     def forward(self, inputs, targets):
+        x = inputs.clone().detach() + torch.zeros_like(inputs).uniform_(-self.epsilon, self.epsilon)
         
-        self.basic_net.zero_grad()
-        outputs, _, _ = self.basic_net(inputs.to(device), bit_config = self.bit_config, plot = False, hessian_statistic=True)
-        criterion = nn.CrossEntropyLoss().to(device)
-        loss = criterion(outputs, targets.to(device))
-        loss.backward(create_graph=True)
-        grad = inputs.grad.clone()
-        print(grad)
-        # x = inputs.clone().detach()
-        # x = x + torch.zeros_like(x).uniform_(-self.epsilon, self.epsilon)
-        # for i in range(self.num_steps):
-        #     x = x.clone().detach().requires_grad_(True)
-        #     # with torch.enable_grad():
-        #     outputs, Flops, distance = self.basic_net(x, self.bit_config, False)
-        #     loss = F.cross_entropy(outputs, targets, reduction='sum')
-        #         # loss = myloss(outputs, targets)
-        #     loss.backward()
-        #     # grad = torch.autograd.grad(loss, [x], create_graph=False)[0]
-        #     grad = x.grad.clone()
-        #     x = x + self.step_size*torch.sign(grad)
-        #     x = torch.min(torch.max(x, inputs - self.epsilon), inputs + self.epsilon)
-        #     # x = torch.clamp(x, inputs.min().item(), inputs.max().item())
-        #     x = torch.clamp(x, 0, 1)
-            
-        #     with torch.no_grad():
-        #         self.basic_net.eval()
-        #         adv_output, Flops, distance= self.basic_net(x, self.bit_config, False)
-            
-        # return adv_output, x
-    
-bit_config = [4]*50
-attack_net = AttackPGD(model, epsilon=0.1, step_size=0.01, num_steps=50, bit_config=bit_config)
-
-def get_seed_inputs(n, rand=False, input_shape = (3, 224, 224)):
-    if rand:
-        batch_input_size = (n, input_shape[0], input_shape[1], input_shape[2])
-        images = np.random.normal(size = batch_input_size).astype(np.float32)
-    else:
-        model_type = args.model.split('_')[0]
-        if model_type == 'deit':
-            mean = (0.485, 0.456, 0.406)
-            std = (0.229, 0.224, 0.225)
-            crop_pct = 0.875
-        elif model_type == 'vit':
-            mean = (0.5, 0.5, 0.5)
-            std = (0.5, 0.5, 0.5)
-            crop_pct = 0.9
-        elif model_type == 'swin':
-            mean = (0.485, 0.456, 0.406)
-            std = (0.229, 0.224, 0.225)
-            crop_pct = 0.9
-        else:
-            raise NotImplementedError
-
-        train_transform = build_transform(mean=mean, std=std, crop_pct=crop_pct)
-
-        # Data
-        traindir = os.path.join(args.data, 'train')
-
-        train_dataset = datasets.ImageFolder(traindir, train_transform)
-        train_loader = torch.utils.data.DataLoader(
-            train_dataset,
-            batch_size=n,
-            shuffle=True,
-            num_workers=args.num_workers,
-            pin_memory=True,
-            drop_last=True,
-        )
+        def myloss(yhat, y):
+            return -((yhat[:,0]-y[:,0])**2 + 0.1*((yhat[:,1:]-y[:,1:])**2).mean(1)).mean()
+        for i in range(self.num_steps):
+            x.requires_grad_()
+            with torch.enable_grad():
+                output = self.basic_net(x)
+                if isinstance(output, tuple):
+                    output = output[0] 
+                # loss = F.cross_entropy(output, targets)
+                loss = myloss(output, targets)
+            grad = torch.autograd.grad(loss, [x])[0]
+            x = x.detach() + self.step_size * torch.sign(grad.detach())
+            x = torch.min(torch.max(x, inputs - self.epsilon), inputs + self.epsilon)
+            x = torch.clamp(x, 0, 1)
         
-        images, labels = next(iter(train_loader))
-    return images, labels
-        
-        
-        
+        return x
 
 def gen_adv_inputs(model, inputs, labels):
     model.eval()
-    inputs = inputs.to(device)
-    labels = labels.to(device)
-    bit_config = [8]*50
-    # with torch.no_grad():
-    #     clean_output, FLOPs, distance = model(inputs, bit_config, plot=False)
-    # output_shape = clean_output.shape
-    # batch_size = output_shape[0]
-    # num_classes = output_shape[1]
+    clean_output = model(inputs)
     
+    if isinstance(clean_output, tuple):
+        clean_output = clean_output[0]
     
-    # output_mean = clean_output.mean(axis = 0)
-    # target_outputs = output_mean - clean_output
+    attack_net = AttackPGD(model, epsilon=0.3, step_size=0.01, num_steps=50)
     
-    # y = target_outputs * 1000 
+    output_mean = clean_output.mean(dim=0)
+    target_outputs = output_mean - clean_output
     
-    # adv_outputs, adv_inputs = attack_net(inputs, y)
-    # torch.cuda.empty_cache()
-    
-    
-    model.zero_grad()
-    outputs = model(inputs.to(device), hessian_statistic=True)
-    criterion = nn.CrossEntropyLoss().to(device)
-    loss = criterion(outputs[0], labels)
-    loss.backward(create_graph=True)
-    grad = inputs.grad.clone()
-    print(grad)
-    
-    return adv_inputs.to('cpu').numpy()
-    
+    y = target_outputs * 1000 
+    adv_inputs = attack_net(inputs, y)
+    return adv_inputs.detach()
 
-def compute_ddv(model, normal_inputs, adv_inputs):
+def calculate_accuracy(model, data_loader, device, bit_config=None):
     model.eval()
-    
+    correct = 0
+    total = 0
     with torch.no_grad():
-        
-        normal_outputs, _, _ = model(normal_inputs.to(device))
-        adv_outputs, _, _ = model(adv_inputs.to(device))
-        
-    normal_outputs = normal_outputs.cpu().numpy()
-    adv_outputs = adv_outputs.cpu().numpy()
-            
-    output_pairs = zip(normal_outputs, adv_outputs)
+        for inputs, labels in data_loader:
+            inputs, labels = inputs.to(device), labels.to(device)
+            outputs, _, _ = model(inputs)
+            if isinstance(outputs, tuple):
+                outputs = outputs[0]
+            _, predicted = torch.max(outputs.data, 1)
+            total += labels.size(0)
+            correct += (predicted == labels).sum().item()
     
-    ddv = []
-    for i, (ya, yb) in enumerate(output_pairs):
-        #ya와 yb의 cosiene similarity를 계산
-        # dist = spatial.distance.cosine(ya, yb) -> 대체
-        ya = ya / np.linalg.norm(ya)
-        yb = yb / np.linalg.norm(yb)
-        cos_similarity = np.dot(ya, yb)
-        ddv.append(cos_similarity)
-    ddv = np.array(ddv)
-    norm = np.linalg.norm(ddv)
-    if norm != 0:
-        ddv = ddv/ norm
-    return ddv
+    accuracy = 100 * correct / total
+    return accuracy
 
+def calibrate_model(mode, args, model, train_loader, device):
+    if mode == 0:  # Real data mode
+        # Get calibration set.
+        image_list = []
+        for i, (data, target) in enumerate(train_loader):
+            if i == args.calib_iter:
+                break
+            data = data.to(device)
+            image_list.append(data)
 
+        print("Calibrating with real data...")
+        model.model_open_calibrate()
+        with torch.no_grad():
+            model.model_open_last_calibrate()
+            output, FLOPs, global_distance = model(image_list[0], plot=False)
+
+    model.model_close_calibrate()
+    model.model_quant()
+    return model
+
+def main():
+    args = parser.parse_args()
+    device = torch.device(args.device)
+
+    # 모델 로드
+    cfg = Config(False, False, 'minmax')  # ptf와 lis를 False로 설정
+    
+    original_model = str2model(args.model)(pretrained=True, cfg=cfg)
+    original_model = original_model.to(device)
+
+    quantization_model = str2model(args.model)(pretrained=True, cfg=cfg)
+    quantization_model = quantization_model.to(device)
+    
+    # 데이터 로더 생성
+    traindir = os.path.join(args.data, 'train')
+    valdir = os.path.join(args.data, 'val')
+    
+    train_transform = build_transform()
+    val_transform = build_transform()
+
+    train_dataset = datasets.ImageFolder(traindir, train_transform)
+    val_dataset = datasets.ImageFolder(valdir, val_transform)
+
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=10,
+        shuffle=True,
+        num_workers=args.num_workers,
+        pin_memory=True,
+        drop_last=True,
+    )
+    
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=10,
+        shuffle=False,
+        num_workers=args.num_workers,
+        pin_memory=True,
+    )
+
+    # Calibrate and quantize the model
+    quantized_model = calibrate_model(0, args, quantization_model, train_loader, device)
+
+    # 정확도 계산
+    original_accuracy = calculate_accuracy(original_model, val_loader, device)
+    quantized_accuracy = calculate_accuracy(quantized_model, val_loader, device)
+
+    print(f"Original model accuracy: {original_accuracy:.2f}%")
+    print(f"Quantized model accuracy: {quantized_accuracy:.2f}%")
+    
+    # 훅 추가
+    original_outputs = {}
+    quantized_outputs = {}
+    add_hooks(original_model, original_outputs)
+    add_hooks(quantized_model, quantized_outputs)
+
+    # Seed 입력 및 적대적 예제 생성
+    seed_images, seed_labels = get_seed_inputs(args)
+    adv_inputs = gen_adv_inputs(original_model, seed_images, seed_labels)
+
+    # DDV 계산
+    original_ddv = compute_ddv(original_model, seed_images, adv_inputs, original_outputs)
+    quantized_ddv = compute_ddv(quantized_model, seed_images, adv_inputs, quantized_outputs)
+
+    # 유사도 계산 및 출력
+    print("Similarities between original and quantized model:")
+    calculate_and_print_similarities(original_ddv, quantized_ddv)
+
+    for key in quantized_ddv.keys():
+        print(quantized_ddv[key] - original_ddv[key])
 if __name__ == '__main__':
-    torch.autograd.set_detect_anomaly(True)
-    normal_inputs, labels = get_seed_inputs(10)
-    adv_inputs = gen_adv_inputs(model, normal_inputs, labels)
-    ddv = compute_ddv(model, normal_inputs, adv_inputs)
-    print(ddv)
+    main()
