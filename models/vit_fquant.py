@@ -67,11 +67,11 @@ class Attention(nn.Module):
                  calibrate=False,
                  cfg=None):
         super().__init__()
-        self.num_heads = num_heads
-        head_dim = dim // num_heads
+        self.num_heads = num_heads #멀티헤드 어텐션의 헤드 수 결정
+        head_dim = dim // num_heads # 각 헤드의 차원 계산
         self.calibrate =calibrate
         # NOTE scale factor was wrong in my original version, can set manually to be compat with prev weights
-        self.scale = qk_scale or head_dim**-0.5
+        self.scale = qk_scale or head_dim**-0.5 #스케일 팩터 설정.
 
         self.qkv = QLinear(dim,
                            dim * 3,
@@ -81,7 +81,7 @@ class Attention(nn.Module):
                            bit_type=cfg.BIT_TYPE_W,
                            calibration_mode=cfg.CALIBRATION_MODE_W,
                            observer_str=cfg.OBSERVER_W,
-                           quantizer_str=cfg.QUANTIZER_W)
+                           quantizer_str=cfg.QUANTIZER_W) #Q, K, V 계산을 위한 양자화된 선형 곱 층
         # self.qacts = QAct(quant=quant,
         #                   calibrate=calibrate,
         #                   bit_type=cfg.BIT_TYPE_A,
@@ -106,6 +106,7 @@ class Attention(nn.Module):
                           calibration_mode=cfg.CALIBRATION_MODE_A,
                           observer_str=cfg.OBSERVER_A,
                           quantizer_str=cfg.QUANTIZER_A)
+        #출력 프로젝션을 위한 양자화된 선형 층
         self.proj = QLinear(dim,
                             dim,
                             quant=quant,
@@ -126,14 +127,16 @@ class Attention(nn.Module):
         #                   calibration_mode=cfg.CALIBRATION_MODE_A,
         #                   observer_str=cfg.OBSERVER_A,
         #                   quantizer_str=cfg.QUANTIZER_A)
+        
+        #어텐션 스코어 양자화를 위한 활성화함수.
         self.qact_attn1 = QAct(quant=quant,
                                calibrate=calibrate,
                                bit_type=cfg.BIT_TYPE_A,
                                calibration_mode=cfg.CALIBRATION_MODE_A,
                                observer_str=cfg.OBSERVER_A,
                                quantizer_str=cfg.QUANTIZER_A)
-        self.attn_drop = nn.Dropout(attn_drop)
-        self.proj_drop = nn.Dropout(proj_drop)
+        self.attn_drop = nn.Dropout(attn_drop) #어텐션 드롭 아웃
+        self.proj_drop = nn.Dropout(proj_drop) #프로젝션 드롭아웃
         self.log_int_softmax = QIntSoftmax(
             log_i_softmax=cfg.INT_SOFTMAX,
             quant=quant,
@@ -142,7 +145,8 @@ class Attention(nn.Module):
             calibration_mode=cfg.CALIBRATION_MODE_S,
             observer_str=cfg.OBSERVER_S,
             quantizer_str=cfg.QUANTIZER_S)
-        self.channel_scale = None
+        self.channel_scale = None #채널 스케일링 팩터(Smooth Quant에서 사용)
+        self.qkv_output = None
 
     def forward(self, x, FLOPs, global_distance, atten_bit_config, plot=False, quant=False, smoothquant=True, hessian_statistic=False):
         # B, N, C = x[0].shape
@@ -178,18 +182,20 @@ class Attention(nn.Module):
         # x[0] = self.proj_drop(x[0])
         # x[1] = self.proj_drop(x[1])
         # return x
-        self.atten_bit_config = atten_bit_config
+        self.atten_bit_config = atten_bit_config #어텐션 비트 설정 저장
         
-        activation = []
-        B, N, C = x.shape
+        activation = [] #활성화 값 저장을 위한 리스트
+        B, N, C = x.shape #입력 텐서의 shape추출
         if atten_bit_config:
-            bit_config = atten_bit_config[0]
+            bit_config = atten_bit_config[0] #첫번쨰 어텐션 비트 설정 추출
         else:
             bit_config = None
         
         # FIXME: smoothquant
         # out = self.qacts(x)
         if smoothquant and not hessian_statistic:
+            # SmoothQuant 로직 구현
+            
             if self.channel_scale == None:
                 def round_ln(x, type=None):
                     if type == 'ceil':
@@ -290,46 +296,50 @@ class Attention(nn.Module):
             activation.append(x)
             x = self.qkv(x, global_distance, bit_config, weight_smoothed, attn=False, attn_para=[self.num_heads, C, self.scale])
            
-        
+        self.qkv_output = x.detach().clone()  # qkv 출력 저장
+
         B, N, M = x.shape
-        FLOPs.append(N*C*M)
+        FLOPs.append(N*C*M) # FLOPs 계산 및 추가
         # TODO:
+        #입력 양자화
         x = self.qact1(x, attn=False, attn_para=[self.num_heads, C, self.scale])
-        activation.append(x)
-        qkv = x.reshape(B, N, 3, self.num_heads,
+        activation.append(x) #양자화된 입력을 activation에 추가
+        qkv = x.reshape(B, N, 3, self.num_heads, #qkv 텐서 재구성
                         C // self.num_heads).permute(2, 0, 3, 1, 4)  # (BN33)
-        q, k, v = (
+        q, k, v = ( #q, k, v 텐서로 분리
             qkv[0],
             qkv[1],
             qkv[2],
         )  # make torchscript happy (cannot use tensor as tuple)
-        attn = (q @ k.transpose(-2, -1)) * self.scale
-        attn = self.qact_attn1(attn)
-        activation.append(x)
+        attn = (q @ k.transpose(-2, -1)) * self.scale #어텐션 스케일링
+        attn = self.qact_attn1(attn) #어텐션 스코어 양자화
+        activation.append(x) #양자화된 어텐션 스코어를 activation에 추가
         # TODO:
+        #log int softmax 적용.
         attn = self.log_int_softmax(attn, self.qact_attn1.quantizer.scale)
         # attn = attn.softmax(dim=-1)
-        attn = self.attn_drop(attn)
-        x = (attn @ v).transpose(1, 2).reshape(B, N, C)
-        x = self.qact2(x)
-        activation.append(x)
+        
+        attn = self.attn_drop(attn) #어텐션 드롭아웃
+        x = (attn @ v).transpose(1, 2).reshape(B, N, C) #어텐션 값 계산
+        x = self.qact2(x) #어텐션 값 양자화
+        activation.append(x) #양자화된 어텐션 값을 activation에 추가
         
         B, N, C = x.shape
         if atten_bit_config:
             bit_config = atten_bit_config[1]
         else:
             bit_config = None
-        x = self.proj(x, global_distance, bit_config)
+        x = self.proj(x, global_distance, bit_config) #최종 프로젝션에서 양자화 비트를 사용한다.
         B, N, M = x.shape
-        FLOPs.append(N*C*M)
+        FLOPs.append(N*C*M) #FLOPs 계산 및 추가
         
-        x = self.qact3(x)
-        activation.append(x)
+        x = self.qact3(x) #프로젝션 값 양자화
+        activation.append(x) #양자화된 프로젝션 값을 activation에 추가
         if plot:
-            plot_distribution(activation, 'attn', quant)
+            plot_distribution(activation, 'attn', quant) #활성화 분포 플로팅 (디버깅용)
         # exit()
-        x = self.proj_drop(x)
-        return x
+        x = self.proj_drop(x) # 프로젝션 드롭아웃 적용
+        return x  # 최종 어텐션 결과 반환
 
     def get_requant_scale(self):
         bit_config = self.atten_bit_config[1]

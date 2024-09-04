@@ -197,6 +197,7 @@ class Mlp(nn.Module):
         #                   quantizer_str=cfg.QUANTIZER_A)
         self.drop = nn.Dropout(drop)
         self.channel_scale = None
+        self.fc1_output = None
 
     def forward(self, x, FLOPs, global_distance, ffn_bit_config, plot=False, quant=True, smoothquant=True, activation=[], hessian_statistic=False):
         # x = self.fc1(x)
@@ -320,6 +321,8 @@ class Mlp(nn.Module):
             x = self.fc1(x, global_distance, bit_config, weight_smoothed)
 
         # activation.append(x_smoothed)
+        self.fc1_output = x.detach().clone()  # qkv 출력 저장
+
         B, N, M = x.shape
         FLOPs.append(N*C*M)
         
