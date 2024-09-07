@@ -95,7 +95,6 @@ def seed(seed=0):
     np.random.seed(seed)
     random.seed(seed)
     
-    
 class AverageMeter(object):
     """Computes and stores the average and current value"""
 
@@ -160,8 +159,6 @@ def build_transform(input_size=224,
     t.append(transforms.ToTensor())
     t.append(transforms.Normalize(mean, std))
     return transforms.Compose(t)
-
-
 def validate(args, val_loader, model, criterion, device, bit_config=None):
     batch_time = AverageMeter()
     losses = AverageMeter()
@@ -211,7 +208,6 @@ def validate(args, val_loader, model, criterion, device, bit_config=None):
           format(top1=top1, top5=top5, time=val_end_time - val_start_time))
 
     return losses.avg, top1.avg, top5.avg
-
 def model_make(model_name, ptf, lis, quant_method, device):
     device = torch.device(device)
     cfg = Config(ptf, lis, quant_method)
@@ -268,7 +264,6 @@ def calibrate_model(mode = 0, args = None, model = None, train_loader = None, de
     model.model_close_calibrate()
     model.model_quant()
     return model
-
 
 args = parser.parse_args(args=[])
 seed(args.seed)
@@ -440,13 +435,16 @@ def get_dataset(n, input_shape = (3, 224, 224)):
     return train_loader
         
 
-def gen_adv_inputs(model, inputs, labels, bit_config, attack_net):
+def gen_adv_inputs(model, inputs, labels, attack_net):
+    """
+    model에 대해 입력을 받아서 adversarial example을 생성하는 함수입니다.
+    """
     model.eval()
     inputs = inputs.to(device)
     labels = labels.to(device)
     # bit_config = [8]*50
-    with torch.no_grad():
-        clean_output, FLOPs, distance = model(inputs, bit_config, plot=False)
+    # with torch.no_grad():
+    #     clean_output, FLOPs, distance = model(inputs, bit_config, plot=False)
     # output_shape = clean_output.shape
     # batch_size = output_shape[0]
     # num_classes = output_shape[1]
@@ -457,15 +455,15 @@ def gen_adv_inputs(model, inputs, labels, bit_config, attack_net):
     target_outputs = output_mean - clean_output를 사용함으로써, 각 입력이 평균 출력과 다르게 되도록 유도하고 있습니다.
     이는 생성된 입력들이 서로 다른 특성을 가지도록 하는 데 도움이 됩니다.
     """
-    output_mean = clean_output.mean(axis = 0)
-    target_outputs = output_mean - clean_output
+    # output_mean = clean_output.mean(axis = 0)
+    # target_outputs = output_mean - clean_output
     """
     결정 경계 탐색:
     y = target_outputs * 1000에서 큰 스케일 팩터(1000)를 사용하는 것은,
     모델의 결정 경계를 더 잘 탐색하기 위한 것으로 보입니다.
     이는 논문의 Figure 3에서 설명하는 "decision boundary" 개념과 연관됩니다.
     """
-    y = target_outputs * 1000 
+    # y = target_outputs * 1000 
     
     adv_outputs, adv_inputs = attack_net(inputs, labels)
     # adv_outputs, adv_inputs = attack_net(inputs, y)
@@ -671,18 +669,19 @@ eight_bit_config = [8]*50
 not_quantized_attack_net = AttackPGD(not_quantized_model, epsilon=0.06, step_size=0.01, num_steps=50, bit_config=None)
 four_bit_config = [4]*50
 seed_images, seed_labels = get_seed_inputs(50, rand=False)
-adv_inputs = gen_adv_inputs(not_quantized_model, seed_images, seed_labels, bit_config=None, attack_net=not_quantized_attack_net)
+adv_inputs = gen_adv_inputs(not_quantized_model, seed_images, seed_labels, attack_net=not_quantized_attack_net)
 # mutation_inputs = gen_profiling_inputs_in_blackbox(not_quantized_model, None,  int4_model, four_bit_config, seed_images, epsilon=0.02)
 
 
-# int8_model = calibrate_model(args.mode, args, int8_model, train_loader, device)
-# int4_model = calibrate_model(args.mode, args, int4_model, train_loader, device)
+int8_model = calibrate_model(args.mode, args, int8_model, train_loader, device)
+int4_model = calibrate_model(args.mode, args, int4_model, train_loader, device)
 
 
 int8_model.eval()
 int4_model.eval()
 not_quantized_model.eval()
 
+print()
 
 def normalize_activations(act):
     # 입력 텐서를 2D로 재구성합니다. 첫 번째 차원은 유지하고 나머지는 평탄화합니다.
@@ -698,74 +697,161 @@ def normalize_activations(act):
     act = act / act_norm
 
     return act
-def get_activations(images, model, normalize_act=False):
-    # 모델을 평가 모드로 설정합니다.
-
-    # 중간 활성화를 저장할 리스트를 초기화합니다.
-    activations = []
-
-    # 그래디언트 계산을 비활성화합니다.
-    with torch.no_grad():
-        # 각 레이어에 대한 후크(hook) 함수를 정의합니다.
-        def hook(module, input, output):
-            activations.append(output)
-
-        # 모든 레이어에 후크를 등록합니다.
-        hooks = []
-        for layer in model.modules():
-            if isinstance(layer, (nn.Conv2d, nn.Linear)):  # 원하는 레이어 유형을 선택하세요
-                hooks.append(layer.register_forward_hook(hook))
-
-        # 모델을 통해 이미지를 전달합니다.
-        images = images.cuda()
-        _ = model(images)
-
-        # 등록된 후크를 제거합니다.
-        for h in hooks:
-            h.remove()
-
-    # 필요한 경우 활성화를 정규화합니다.
-    if normalize_act:
-        activations = [normalize_activations(act) for act in activations]
-
-    return activations
 #torch model의 layers의 수를 확인한다.
 from efficient_CKA import *
 
-def compute_cka_internal(model, use_batch = True,
-                         use_train_mode = False,
+def get_activations(images, model, bit_config, normalize_act=False):
+    model = model.to(device)
+
+    
+
+
+
+    def get_module_path(module):
+        return f"{module.__class__.__module__}.{module.__class__.__name__}"
+
+    activations = []
+    layer_info = []
+    from models.vit_fquant import Attention, Mlp
+    def hook_return(index):
+        def hook(module, input, output):
+            if isinstance(module, Attention):
+                activations.append(module.qkv_output)
+                layer_info.append({
+                'relative_index': len(activations) - 1,
+                'absolute_index': index,
+                'name': module.__class__.__name__,
+                'layer_type': type(module),
+                'path': get_module_path(module)
+
+                })
+            elif isinstance(module, Mlp):
+                activations.append(module.fc1_output)
+                layer_info.append({
+                'relative_index': len(activations) - 1,
+                'absolute_index': index,
+                'name': module.__class__.__name__,
+                'layer_type': type(module),
+                'path': get_module_path(module)
+
+                })
+            else:    
+                activations.append(output)
+                layer_info.append({
+                    'relative_index': len(activations) - 1,
+                    'absolute_index': index,
+                    'name': module.__class__.__name__,
+                    'layer_type': type(module),
+                    'path': get_module_path(module)
+
+                })
+            
+
+        return hook
+
+    hooks = []
+
+
+    for index, layer in enumerate(model.modules()):
+        if type(layer) in [QConv2d, QLinear, Attention, Mlp]:
+            hooks.append(layer.register_forward_hook(hook_return(index)))
+
+    # 모델을 통해 이미지를 전달합니다.
+    images = images.cuda()
+    _ = model(images, bit_config = bit_config, plot=False)
+
+    # 등록된 후크를 제거합니다.
+    for h in hooks:
+        h.remove()
+
+
+
+
+
+    # layer_info와 activations를 절대 인덱스를 기준으로 정렬
+    sorted_indices = sorted(range(len(layer_info)), key=lambda k: layer_info[k]['absolute_index'])
+    layer_info = [layer_info[i] for i in sorted_indices]
+    activations = [activations[i] for i in sorted_indices]
+
+    # 상대 인덱스 재할당
+    for i, info in enumerate(layer_info):
+        info['relative_index'] = i
+
+
+    if normalize_act:
+        activations = [normalize_activations(act) for act in activations]
+    return activations
+    # 정렬된 레이어 정보 출력
+    # for info in layer_info:
+    #     print(f"Layer {info['relative_index']}(absolute: {info['absolute_index']}): {info['name']} (Type: {info['layer_type']}, Path: {info['path']})")
+
+    # print(f"\nTotal number of activations: {len(activations)}")
+    
+    # 필요한 라이브러리 임포트
+import torch
+import argparse
+import os
+import pickle
+import numpy as np
+from plot import *
+
+def plot_cka_map(cka_file_name, plot_name):
+    base_dir = '/home/jieungkim/quantctr/diff-ViT'
+
+
+
+    # GPU 설정
+
+
+    # CKA 결과 파일 경로 설정
+    cka_dir = os.path.join(base_dir, cka_file_name)
+
+
+    # CKA 결과 불러오기
+    with open(cka_dir, 'rb') as f:
+        cka = pickle.load(f)
+        
+        
+
+
+    # 전체 레이어에 대한 CKA 결과 플롯 생성
+    plot_dir = os.path.join(base_dir, plot_name)
+    plot_ckalist_resume([cka], plot_dir)
+# plot_cka_map('cka_not_quantized_result.pkl', 'cka_not_quantized_result.png')
+from DDV_CKA import *
+def compute_cka_with_adversarial(model1, model2, use_batch = True,
                          normalize_act = False,
                          cka_batch = 50,
                          cka_batch_iter = 10,
-                         cka_iter = 10):
-    model.eval()
+                         cka_iter = 10,
+                         result_name = 'cka_result.pkl',
+                         model1_bit_config = None,
+                         model2_bit_config = None,
+                         ):
+    model1.eval()
+    model2.eval()
 
     sample_cka_dataset = get_dataset(cka_batch)
 
     sample_cka_dataset = next(iter(sample_cka_dataset))
 
-    sample_images, _ = sample_cka_dataset
-    # n_layers = len(list(not_quantized_model.children()))
-    # n_layers = len([layer for layer in model.modules() if isinstance(layer, (nn.Conv2d, nn.Linear))])
+    sample_images, sample_labels = sample_cka_dataset
+    cka_attack_net1 = AttackPGD(model1, epsilon=0.06, step_size=0.01, num_steps=50, bit_config = model1_bit_config)
+    
+    
+    
+    # cka_attack_net2 = AttackPGD(model2, epsilon=0.06, step_size=0.01, num_steps=50, bit_config = bit_config)
+    #@To Do: cka_attack_net2를 직접 사용해보기
+    cka_attack_net2 = cka_attack_net1 #모델1과 같은 공격 네트워크를 사용한다. 
+    
+    
+    
+    
 
-    sample_activations = get_activations(sample_images, model)
+    sample_activations = get_activations(sample_images, model1, model1_bit_config, normalize_act)
     n_layers = len(sample_activations)
 
-    cka = MinibatchCKA(n_layers)
-
-
-
-
-
-
-
-    # 사용 예시:
-    # model = YourModel()  # PyTorch 모델을 정의하세요
-    # images = torch.randn(10, 3, 224, 224)  # 예시 입력 이미지
-    # activations = get_activations(images, model, normalize_act=True)
-
-
-    
+    cka = MinibatchAdvCKA(n_layers)
     
 
     if use_batch:
@@ -773,24 +859,50 @@ def compute_cka_internal(model, use_batch = True,
             #cka_batch만큼, shuffle해서, 데이터셋을 가져온다.
             cka_dataset = get_dataset(cka_batch)
             current_iter = 0
-            for images, _ in cka_dataset:
-                model_get_activation = get_activations(images, model, normalize_act)
-
-                cka.update_state(model_get_activation)
-                print("현재 반복:", index, "/", current_iter)
+            for images, labels in cka_dataset:
+                adv_images = gen_adv_inputs(model1, images, labels, cka_attack_net1)
+                
+                model1_get_activation = get_activations(images, model1, model1_bit_config, normalize_act) #각 모델의 레이어별 활성화를 가져온다.
+                model1_get_adv_activation = get_activations(adv_images, model1, model1_bit_config, normalize_act)
+                
+                model2_get_activation = get_activations(images, model2, model2_bit_config, normalize_act)
+                model2_get_adv_activation = get_activations(adv_images, model2, model2_bit_config, normalize_act)
+                
+                cka.update_state(model1_activations=model1_get_activation,
+                                 model1_adv_activations=model1_get_adv_activation,
+                                 model2_activations=model2_get_activation,
+                                 model2_adv_activations=model2_get_adv_activation) #레이어 마다의 activation을 다 가져옴. 예를 들어 24 * 50 * feature^2. 
+                
                 if current_iter > cka_batch_iter:
                     break
                 current_iter += 1
+            print("현재 반복:", index)
     else:
         cka_dataset = get_dataset(cka_batch)
         all_images = []
-        for images, _ in cka_dataset:
+        all_labels = []
+        for images, labels in cka_dataset:
             all_images.append(images)
-        cka.update_state(get_activations(all_images, model, normalize_act))
+            all_labels.append(labels)
+            all_adv_images = gen_adv_inputs(model1, all_images, all_labels, cka_attack_net1)
+        cka.update_state(
+            model1_activations=get_activations(all_images, model1,  model1_bit_config, normalize_act),
+            model1_adv_activations=get_activations(all_adv_images, model1, model1_bit_config, normalize_act),
+            model2_activations=get_activations(all_images, model2, model2_bit_config, normalize_act),
+            model2_adv_activations=get_activations(all_adv_images, model2, model2_bit_config, normalize_act),
+            )
     heatmap = cka.result().cpu().numpy()
-    with open('cka_result.txt', 'wb') as f:
-        np.savetxt(f, heatmap)
+    with open(result_name, 'wb') as f:
+        #pickle로 heatmap을 저장한다.
+        pickle.dump(heatmap, f)
         
-                
-            
-compute_cka_internal(not_quantized_model, use_batch = True, normalize_act = False, cka_batch = 50, cka_iter = 10)
+        
+compute_cka_with_adversarial(not_quantized_model,
+                             int4_model, 
+                             use_batch = True, 
+                             normalize_act = False, 
+                             cka_batch = 10, 
+                             cka_iter = 20, 
+                             result_name='cka_with_adversarial_int4_not_quantized.pkl', 
+                             model1_bit_config = None,
+                             model2_bit_config = four_bit_config)
