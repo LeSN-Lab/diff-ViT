@@ -711,6 +711,8 @@ def get_activations(images, model, bit_config, normalize_act=False):
         return f"{module.__class__.__module__}.{module.__class__.__name__}"
 
     activations = []
+    
+    
     layer_info = []
     from models.vit_fquant import Attention, Mlp
     def hook_return(index):
