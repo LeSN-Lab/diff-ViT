@@ -39,7 +39,7 @@ parser.add_argument('--quant-method',
 parser.add_argument('--mixed', default=True, action='store_true')
 # TODO: 100 --> 32
 parser.add_argument('--calib-batchsize',
-                    default=30,
+                    default=100,
                     type=int,
                     help='batchsize of calibration set')
 parser.add_argument("--mode", default=0,
@@ -49,7 +49,7 @@ parser.add_argument("--mode", default=0,
 parser.add_argument('--calib-iter', default=10, type=int)
 # TODO: 100 --> 200
 parser.add_argument('--val-batchsize',
-                    default=30,
+                    default=200,
                     type=int,
                     help='batchsize of validation set')
 parser.add_argument('--num-workers',
@@ -154,6 +154,7 @@ not_quantized_model.eval()
 
 print()
 
+result_file = "not_quantized_int4_restore_results.txt"
 
 
 for restore_index in range(0, 50):
@@ -205,3 +206,12 @@ for restore_index in range(0, 50):
     val_end_time = time.time()
     print(' * Prec@1 {top1.avg:.3f} Prec@5 {top5.avg:.3f} Time {time:.3f}'.
             format(top1=top1, top5=top5, time=val_end_time - val_start_time))
+    result_string = ' * Restore Index: {idx}, Prec@1 {top1.avg:.3f} Prec@5 {top5.avg:.3f} Time {time:.3f}'.format(
+        idx=restore_index, top1=top1, top5=top5, time=val_end_time - val_start_time)
+        # 결과를 파일에 추가
+    with open(result_file, 'a') as f:
+        f.write(result_string + '\n')
+print(f"Results have been saved to {result_file}")
+
+    
+
