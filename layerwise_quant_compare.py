@@ -145,11 +145,11 @@ adv_inputs = not_quantized_attack_net.gen_adv_inputs(seed_images, seed_labels)
 
 
 # int8_model = calibrate_model(args.mode, args, int8_model, train_loader, device)
-int4_model = calibrate_model(args.mode, args, int4_model, train_loader, device)
+# int4_model = calibrate_model(args.mode, args, int4_model, train_loader, device)
 
 
 # int8_model.eval()
-int4_model.eval()
+# int4_model.eval()
 not_quantized_model.eval()
 
 print()
@@ -158,24 +158,28 @@ result_file = "not_quantized_int4_restore_results.txt"
 
 
 for restore_index in range(0, 50):
+
     batch_time = AverageMeter()
     losses = AverageMeter()
     top1 = AverageMeter()
     top5 = AverageMeter()
     val_start_time = end = time.time()
-
+    int4_model = model_make(args.model, args.ptf, args.lis, args.quant_method, args.device)
+    int4_model = calibrate_model(args.mode, args, int4_model, train_loader, device)
+    int4_model.eval()
     for i, (inputs, labels) in enumerate(val_loader):
-        
+
         inputs = inputs.to(device)
         labels = labels.to(device)
-        
+
         four_bit_config = [4] * 50
         # four_bit_config = [-1] * 25
         # four_bit_config = four_bit_config + [4] * 25
 
         four_bit_config[restore_index] = -1
         labels = labels.to(device)
-        
+
+
         with torch.no_grad():
             output, FLOPs, distance = int4_model(inputs, four_bit_config, False)
         loss = criterion(output, labels)
@@ -208,9 +212,10 @@ for restore_index in range(0, 50):
             format(top1=top1, top5=top5, time=val_end_time - val_start_time))
     result_string = ' * Restore Index: {idx}, Prec@1 {top1.avg:.3f} Prec@5 {top5.avg:.3f} Time {time:.3f}'.format(
         idx=restore_index, top1=top1, top5=top5, time=val_end_time - val_start_time)
-        # 결과를 파일에 추가
+    # 결과를 파일에 추가
     with open(result_file, 'a') as f:
         f.write(result_string + '\n')
+    torch.cuda.empty_cache()
 print(f"Results have been saved to {result_file}")
 
     
