@@ -219,7 +219,7 @@ class Mlp(nn.Module):
         
         # FIXME: smoothquant
         if smoothquant and not hessian_statistic:
-            if self.channel_scale == None:
+            if self.channel_scale == None or bit_config == -1:
                 def round_ln(x, type=None):
                     if type == 'ceil':
                         return torch.ceil(torch.div(torch.log(x),torch.log(torch.Tensor([2]).cuda())))
@@ -269,7 +269,7 @@ class Mlp(nn.Module):
                     
                     # observe to obtaion scaling factors
                     middle_out = self.qact0(x_smoothed)
-                    if self.qact0.last_calibrate:
+                    if self.qact0.last_calibrate and bit_config != -1:
                         act_scale.append(self.qact0.quantizer.scale)
                         act_zp.append(self.qact0.quantizer.zero_point)
                         middle_out = self.fc1(middle_out, global_distance, bit_config, weight_smoothed)
@@ -288,7 +288,7 @@ class Mlp(nn.Module):
                         self.qact0.calibrate = True
                         self.fc1.quant = False
                         self.fc1.calibrate = True
-                if self.qact0.last_calibrate:
+                if self.qact0.last_calibrate and bit_config != -1:
                     for loss in loss_pool:
                         indx = loss.index(min(loss))
                         self.channel_scale = channel_scale_pool[indx]

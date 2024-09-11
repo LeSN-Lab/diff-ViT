@@ -69,7 +69,7 @@ class QConv2d(nn.Conv2d):
                 self.quantizer.observer.update(self.weight)
                 if self.last_calibrate:
                     self.quantizer.update_quantization_params(x, others=[self.bias,self.stride,self.padding,self.dilation,self.groups])
-        if not self.quant:
+        if not self.quant or bit_config == -1:
             return F.conv2d(
                 x,
                 self.weight,
@@ -141,7 +141,7 @@ class QLinear(nn.Linear):
         # return F.linear(x, weight, self.bias)
         if weight_smoothed==None:
             weight_smoothed = self.weight
-        if not self.quant:
+        if not self.quant or bit_config == -1:
             # y = F.linear(x, self.weight, self.bias)
             y = F.linear(x, weight_smoothed, self.bias)
 
@@ -168,7 +168,7 @@ class QLinear(nn.Linear):
                 # distance.append(utils.lp_loss(y, y_q, p=2.0, reduction='all'))
                 distance.append(utils.lp_loss(weight_smoothed, weight, p=2.0, reduction='all'))
             global_distance.append(distance)
-        if not self.quant:
+        if not self.quant or bit_config == -1:
             return y
         if bit_config:
             bit_type = 'int' + str(bit_config)

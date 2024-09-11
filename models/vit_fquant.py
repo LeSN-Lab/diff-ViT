@@ -196,7 +196,7 @@ class Attention(nn.Module):
         if smoothquant and not hessian_statistic:
             # SmoothQuant 로직 구현
             
-            if self.channel_scale == None:
+            if self.channel_scale == None or bit_config == -1:
                 def round_ln(x, type=None):
                     if type == 'ceil':
                         return torch.ceil(torch.div(torch.log(x),torch.log(torch.Tensor([2]).cuda())))
@@ -246,7 +246,7 @@ class Attention(nn.Module):
                     
                     # observe to obtaion scaling factors
                     middle_out = self.qact0(x_smoothed)
-                    if self.qact0.last_calibrate:
+                    if self.qact0.last_calibrate and bit_config != -1:
                         act_scale.append(self.qact0.quantizer.scale)
                         act_zp.append(self.qact0.quantizer.zero_point)
                         middle_out = self.qkv(middle_out, global_distance, bit_config, weight_smoothed, attn=False, attn_para=[self.num_heads, C, self.scale])
@@ -265,7 +265,7 @@ class Attention(nn.Module):
                         self.qact0.calibrate = True
                         self.qkv.quant = False
                         self.qkv.calibrate = True
-                if self.qact0.last_calibrate:
+                if self.qact0.last_calibrate and bit_config != -1:
                     for loss in loss_pool:
                         indx = loss.index(min(loss))
                         self.channel_scale = channel_scale_pool[indx]
@@ -424,6 +424,8 @@ class Block(nn.Module):
         #     self.attn(
         #         self.qact1(self.norm1(x, last_quantizer,
         #                               self.qact1.quantizer)), FLOPs, global_distance, atten_bit_config, plot, quant)))
+        if atten_bit_config is not None and -1 in atten_bit_config:
+            self.norm1.mode = 'ln'
         x = self.qact2(x + self.drop_path(
             self.attn(
                 (self.norm1(x, last_quantizer,
@@ -454,10 +456,14 @@ class Block(nn.Module):
         #         self.qact3(
         #             self.norm2(x, self.qact2.quantizer,
         #                        self.qact3.quantizer)), FLOPs, global_distance, ffn_bit_config, plot, quant)))
-        x = self.qact4(x + self.drop_path(
-            self.mlp(
-                    self.norm2(x, self.qact2.quantizer,
-                               self.mlp.qact0.quantizer, self.attn.channel_scale), FLOPs, global_distance, ffn_bit_config, plot, quant, activation=activation, hessian_statistic=hessian_statistic)))
+        # ffn_bit_config중 하나라도 -1이 있다면
+        if ffn_bit_config is not None and -1 in ffn_bit_config:
+            self.norm2.mode = 'ln'
+        norm2_result = self.norm2(x, self.qact2.quantizer, self.mlp.qact0.quantizer, self.attn.channel_scale)
+        #int4_model: mlp_result가 정상적으로 나왔음.
+        #int-1model: mlp_result가 다 nan으로 나옴. mlp에서 이상이 생긴 것 같음.
+        mlp_result =self.mlp(norm2_result, FLOPs, global_distance, ffn_bit_config, plot, quant, activation=activation, hessian_statistic=hessian_statistic)
+        x = self.qact4(x + self.drop_path(mlp_result))
         # activation.append(x)
         # if plot:
         #     plot_distribution(activation, 'block', quant)
