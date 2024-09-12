@@ -1,3 +1,4 @@
+<<<<<<< HEAD
  * Restore Index: 0, Prec@1 66.177 Prec@5 87.579 Time 165.422
  * Restore Index: 1, Prec@1 65.394 Prec@5 86.929 Time 164.882
  * Restore Index: 0, Prec@1 66.177 Prec@5 87.579 Time 148.282
@@ -18,3 +19,57 @@
  * Restore Index: 0, Prec@1 66.181 Prec@5 87.579 Time 127.639
  * Restore Index: 1, Prec@1 65.353 Prec@5 86.929 Time 127.234
  * Restore Index: 2, Prec@1 65.353 Prec@5 86.861 Time 127.594
+=======
+ * Restore Index: 0, Prec@1 66.216 Prec@5 87.610 Time 143.662
+ * Restore Index: 1, Prec@1 65.536 Prec@5 86.860 Time 142.764
+ * Restore Index: 0, Prec@1 66.110 Prec@5 87.560 Time 859.495
+ * Restore Index: 1, Prec@1 65.392 Prec@5 86.956 Time 868.435
+ * Restore Index: 2, Prec@1 64.778 Prec@5 86.824 Time 876.185
+ * Restore Index: 3, Prec@1 65.750 Prec@5 87.104 Time 867.011
+ * Restore Index: 4, Prec@1 64.996 Prec@5 86.786 Time 875.060
+ * Restore Index: 5, Prec@1 64.498 Prec@5 86.596 Time 864.381
+ * Restore Index: 6, Prec@1 64.868 Prec@5 86.710 Time 852.424
+ * Restore Index: 7, Prec@1 64.274 Prec@5 86.600 Time 862.806
+ * Restore Index: 8, Prec@1 65.126 Prec@5 86.882 Time 859.030
+ * Restore Index: 9, Prec@1 64.822 Prec@5 86.538 Time 866.379
+ * Restore Index: 10, Prec@1 64.800 Prec@5 86.674 Time 864.915
+ * Restore Index: 11, Prec@1 65.468 Prec@5 86.972 Time 863.416
+ * Restore Index: 12, Prec@1 65.242 Prec@5 86.756 Time 857.307
+ * Restore Index: 13, Prec@1 64.330 Prec@5 86.554 Time 861.753
+ * Restore Index: 14, Prec@1 64.906 Prec@5 86.604 Time 872.649
+ * Restore Index: 15, Prec@1 64.956 Prec@5 86.804 Time 863.323
+ * Restore Index: 16, Prec@1 64.924 Prec@5 86.634 Time 865.051
+ * Restore Index: 17, Prec@1 64.462 Prec@5 86.674 Time 859.690
+ * Restore Index: 18, Prec@1 64.524 Prec@5 86.612 Time 866.549
+ * Restore Index: 19, Prec@1 64.948 Prec@5 86.712 Time 863.840
+ * Restore Index: 20, Prec@1 64.804 Prec@5 86.716 Time 866.568
+ * Restore Index: 21, Prec@1 64.752 Prec@5 86.666 Time 871.451
+ * Restore Index: 22, Prec@1 64.584 Prec@5 86.726 Time 862.159
+ * Restore Index: 23, Prec@1 64.538 Prec@5 86.890 Time 865.162
+ * Restore Index: 24, Prec@1 64.328 Prec@5 86.730 Time 869.246
+ * Restore Index: 25, Prec@1 64.966 Prec@5 86.706 Time 868.220
+ * Restore Index: 26, Prec@1 64.408 Prec@5 86.696 Time 591.226
+ * Restore Index: 27, Prec@1 64.760 Prec@5 86.592 Time 160.324
+ * Restore Index: 28, Prec@1 64.834 Prec@5 86.806 Time 162.055
+ * Restore Index: 29, Prec@1 65.182 Prec@5 86.862 Time 160.392
+ * Restore Index: 30, Prec@1 64.808 Prec@5 86.588 Time 163.358
+ * Restore Index: 31, Prec@1 65.102 Prec@5 86.718 Time 160.557
+ * Restore Index: 32, Prec@1 64.966 Prec@5 86.778 Time 163.114
+ * Restore Index: 33, Prec@1 64.850 Prec@5 86.686 Time 160.398
+ * Restore Index: 34, Prec@1 64.910 Prec@5 86.706 Time 161.721
+ * Restore Index: 35, Prec@1 65.206 Prec@5 86.840 Time 160.318
+ * Restore Index: 36, Prec@1 65.074 Prec@5 86.788 Time 162.367
+ * Restore Index: 37, Prec@1 64.608 Prec@5 86.518 Time 186.434
+ * Restore Index: 38, Prec@1 65.006 Prec@5 86.630 Time 163.855
+ * Restore Index: 39, Prec@1 64.636 Prec@5 86.558 Time 160.183
+ * Restore Index: 40, Prec@1 64.868 Prec@5 86.768 Time 186.002
+ * Restore Index: 41, Prec@1 64.888 Prec@5 86.784 Time 181.952
+ * Restore Index: 42, Prec@1 64.956 Prec@5 86.700 Time 162.458
+ * Restore Index: 43, Prec@1 65.084 Prec@5 86.860 Time 159.886
+ * Restore Index: 44, Prec@1 64.760 Prec@5 86.632 Time 161.879
+ * Restore Index: 45, Prec@1 64.900 Prec@5 86.656 Time 176.522
+ * Restore Index: 46, Prec@1 64.980 Prec@5 86.808 Time 162.828
+ * Restore Index: 47, Prec@1 64.590 Prec@5 86.516 Time 161.005
+ * Restore Index: 48, Prec@1 64.536 Prec@5 86.492 Time 162.902
+ * Restore Index: 49, Prec@1 65.120 Prec@5 86.784 Time 160.970
+>>>>>>> origin/master
