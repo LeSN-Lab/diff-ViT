@@ -224,17 +224,19 @@ class Attention(nn.Module):
                 # global_max_x = local_max_x.max(axis=0).values
                 # max_weight = torch.abs(self.qkv.weight).max(axis=0).values
                 channel_scale_pool = []
-                self.best_scale = []
+
                 # gt = F.linear(x, self.qkv.weight, self.qkv.bias)
                 loss_pool = [[],[]]
                 act_scale = []
                 act_zp = []
                 weight_scale = []
                 weight_zp = []
-                self.best_act_scale = []
-                self.best_act_zp = []
-                self.best_weight_scale = []
-                self.best_weight_zp = []
+                if self.channel_scale == None:
+                    self.best_scale = []
+                    self.best_act_scale = []
+                    self.best_act_zp = []
+                    self.best_weight_scale = []
+                    self.best_weight_zp = []
                 for i, alpha in enumerate(alpha_pool):
                     channel_scale = global_max_x**alpha/(max_weight**(1-alpha))
                     aplha = round_ln(channel_scale, 'round')

@@ -145,11 +145,11 @@ adv_inputs = not_quantized_attack_net.gen_adv_inputs(seed_images, seed_labels)
 
 
 # int8_model = calibrate_model(args.mode, args, int8_model, train_loader, device)
-# int4_model = calibrate_model(args.mode, args, int4_model, train_loader, device)
+int4_model = calibrate_model(args.mode, args, int4_model, train_loader, device)
 
 
 # int8_model.eval()
-# int4_model.eval()
+int4_model.eval()
 not_quantized_model.eval()
 
 print()
@@ -164,9 +164,7 @@ for restore_index in range(0, 50):
     top1 = AverageMeter()
     top5 = AverageMeter()
     val_start_time = end = time.time()
-    int4_model = model_make(args.model, args.ptf, args.lis, args.quant_method, args.device)
-    int4_model = calibrate_model(args.mode, args, int4_model, train_loader, device)
-    int4_model.eval()
+
     for i, (inputs, labels) in enumerate(val_loader):
 
         inputs = inputs.to(device)
