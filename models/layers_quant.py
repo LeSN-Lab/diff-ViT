@@ -247,17 +247,19 @@ class Mlp(nn.Module):
                 # activation.append(x)
                 # x = self.fc1(x, global_distance, bit_config, weight_smoothed)
                 channel_scale_pool = []
-                self.best_scale = []
+
                 # gt = F.linear(x, self.qkv.weight, self.qkv.bias)
                 loss_pool = [[],[]]
                 act_scale = []
                 act_zp = []
                 weight_scale = []
                 weight_zp = []
-                self.best_act_scale = []
-                self.best_act_zp = []
-                self.best_weight_scale = []
-                self.best_weight_zp = []
+                if self.channel_scale == None:
+                    self.best_scale = []
+                    self.best_act_scale = []
+                    self.best_act_zp = []
+                    self.best_weight_scale = []
+                    self.best_weight_zp = []
                 for i, alpha in enumerate(alpha_pool):
                     channel_scale = global_max_x**alpha/(max_weight**(1-alpha))
                     aplha = round_ln(channel_scale, 'round')
