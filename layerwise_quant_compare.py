@@ -39,7 +39,7 @@ parser.add_argument('--quant-method',
 parser.add_argument('--mixed', default=True, action='store_true')
 # TODO: 100 --> 32
 parser.add_argument('--calib-batchsize',
-                    default=100,
+                    default=10,
                     type=int,
                     help='batchsize of calibration set')
 parser.add_argument("--mode", default=0,
@@ -49,7 +49,7 @@ parser.add_argument("--mode", default=0,
 parser.add_argument('--calib-iter', default=10, type=int)
 # TODO: 100 --> 200
 parser.add_argument('--val-batchsize',
-                    default=200,
+                    default=20,
                     type=int,
                     help='batchsize of validation set')
 parser.add_argument('--num-workers',
@@ -156,6 +156,63 @@ print()
 
 result_file = "not_quantized_int4_restore_results.txt"
 
+
+
+batch_time = AverageMeter()
+losses = AverageMeter()
+top1 = AverageMeter()
+top5 = AverageMeter()
+val_start_time = end = time.time()
+
+for i, (inputs, labels) in enumerate(val_loader):
+
+    inputs = inputs.to(device)
+    labels = labels.to(device)
+
+    four_bit_config = [4] * 50
+    # four_bit_config = [-1] * 25
+    # four_bit_config = four_bit_config + [4] * 25
+
+    # four_bit_config[restore_index] = -1
+    labels = labels.to(device)
+
+
+    with torch.no_grad():
+        output, FLOPs, distance = int4_model(inputs, four_bit_config, False)
+    loss = criterion(output, labels)
+
+    # measure accuracy and record loss
+    prec1, prec5 = accuracy(output.data, labels, topk=(1, 5))
+    losses.update(loss.data.item(), inputs.size(0))
+    top1.update(prec1.data.item(), inputs.size(0))
+    top5.update(prec5.data.item(), inputs.size(0))
+
+    # measure elapsed time
+    batch_time.update(time.time() - end)
+    end = time.time()
+
+    if i % 10 == 0:
+        print('Test: [{0}/{1}]\t'
+                'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
+                'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
+                'Prec@1 {top1.val:.3f} ({top1.avg:.3f})\t'
+                'Prec@5 {top5.val:.3f} ({top5.avg:.3f})'.format(
+                    i,
+                    len(val_loader),
+                    batch_time=batch_time,
+                    loss=losses,
+                    top1=top1,
+                    top5=top5,
+                ))
+val_end_time = time.time()
+print(' * Prec@1 {top1.avg:.3f} Prec@5 {top5.avg:.3f} Time {time:.3f}'.
+        format(top1=top1, top5=top5, time=val_end_time - val_start_time))
+result_string = ' * Restore Index: nothing, Prec@1 {top1.avg:.3f} Prec@5 {top5.avg:.3f} Time {time:.3f}'.format(
+    top1=top1, top5=top5, time=val_end_time - val_start_time)
+# 결과를 파일에 추가
+with open(result_file, 'a') as f:
+    f.write(result_string + '\n')
+torch.cuda.empty_cache()
 
 for restore_index in range(0, 50):
 
