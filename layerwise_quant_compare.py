@@ -31,8 +31,8 @@ parser.add_argument('--data', metavar='DIR',
                     default='/data/deepops/temp/easy-lora-and-gptq/imagenet',
                     help='path to dataset')
 parser.add_argument('--quant', default=True, action='store_true')
-parser.add_argument('--ptf', default=True)
-parser.add_argument('--lis', default=True)
+parser.add_argument('--ptf', default=False)
+parser.add_argument('--lis', default=False)
 parser.add_argument('--quant-method',
                     default='minmax',
                     choices=['minmax', 'ema', 'omse', 'percentile'])
@@ -154,7 +154,7 @@ not_quantized_model.eval()
 
 print()
 
-result_file = "4to8_not_quantized_int4_restore_results.txt"
+result_file = "false_not_quantized_int4_restore_results.txt"
 
 #int4 기준점 생성
 batch_time = AverageMeter()
@@ -172,7 +172,6 @@ for i, (inputs, labels) in enumerate(val_loader):
     # four_bit_config = [-1] * 25
     # four_bit_config = four_bit_config + [4] * 25
 
-    # four_bit_config[restore_index] = -1
     labels = labels.to(device)
 
 
@@ -213,7 +212,7 @@ with open(result_file, 'a') as f:
     f.write(result_string + '\n')
 torch.cuda.empty_cache()
 
-# restore_indices = [24, 38, 40, 42, 44]
+# restore_indices = [18, 38, 40, 42, 44]
 for restore_index in range(0, 50):
     batch_time = AverageMeter()
     losses = AverageMeter()
@@ -229,8 +228,9 @@ for restore_index in range(0, 50):
         four_bit_config = [4] * 50
         # four_bit_config = [-1] * 25
         # four_bit_config = four_bit_config + [4] * 25
-        four_bit_config[restore_index] = 8
-            
+        # for idx in restore_indices:
+        #     four_bit_config[idx] = -1
+        four_bit_config[restore_index] = -1
         labels = labels.to(device)
 
         with torch.no_grad():
