@@ -39,7 +39,7 @@ parser.add_argument('--quant-method',
 parser.add_argument('--mixed', default=True, action='store_true')
 # TODO: 100 --> 32
 parser.add_argument('--calib-batchsize',
-                    default=100,
+                    default=10,
                     type=int,
                     help='batchsize of calibration set')
 parser.add_argument("--mode", default=0,
@@ -49,7 +49,7 @@ parser.add_argument("--mode", default=0,
 parser.add_argument('--calib-iter', default=10, type=int)
 # TODO: 100 --> 200
 parser.add_argument('--val-batchsize',
-                    default=200,
+                    default=20,
                     type=int,
                     help='batchsize of validation set')
 parser.add_argument('--num-workers',
