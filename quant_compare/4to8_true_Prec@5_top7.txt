@@ -1,0 +1,2 @@
+ * Restore Index: nothing, Prec@1 65.124 Prec@5 86.596 Time 158.005
+ * Restore Index: 0, Prec@1 66.232 Prec@5 87.342 Time 158.906

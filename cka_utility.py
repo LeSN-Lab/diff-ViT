@@ -88,10 +88,6 @@ def get_activations(images, model, bit_config, device, normalize_act=False):
     for h in hooks:
         h.remove()
 
-
-
-
-
     # layer_info와 activations를 절대 인덱스를 기준으로 정렬
     sorted_indices = sorted(range(len(layer_info)), key=lambda k: layer_info[k]['absolute_index'])
     layer_info = [layer_info[i] for i in sorted_indices]
@@ -206,9 +202,6 @@ def compute_cka_with_adversarial(model1, model2, use_batch = True,
     cka_attack_net2 = cka_attack_net1 #모델1과 같은 공격 네트워크를 사용한다. 
     
     
-    
-    
-
     sample_activations = get_activations(
         images = sample_images,
         model = model1,
@@ -312,4 +305,3 @@ def compute_cka_with_adversarial(model1, model2, use_batch = True,
     #result_name 폴더에 result_name_heatmap.pkl로 heatmap을 저장한다.
     with open(os.path.join(result_name, result_name + '_heatmap.pkl'), 'wb') as f:
         pickle.dump(heatmap, f)
-    
