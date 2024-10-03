@@ -26,7 +26,7 @@ import numpy as np
 from pyhessian.utils import group_product, group_add, normalization, get_params_grad, hessian_vector_product, orthnormal
 
 
-class DDV_hessian():
+class DDVHessian():
     """
     The class used to compute :
         i) the top 1 (n) eigenvalue(s) of the neural network
@@ -34,7 +34,17 @@ class DDV_hessian():
         iii) the estimated eigenvalue density
     """
 
-    def __init__(self, quantized_model, original_model, criterion, data=None, adv_data=None, dataloader=None, adv_dataloader=None, cuda=True):
+    def __init__(self, 
+                 model,
+                 q_model,
+                 criterion,
+                 data=None,
+                 adv_data = None,
+                 original_ddv=None,
+                 dataloader=None,
+                 adv_dataloader = None,
+                 attack_net = None,
+                 cuda=True):
         """
         model: the model that needs Hessain information
         criterion: the loss function
@@ -45,28 +55,29 @@ class DDV_hessian():
         # make sure we either pass a single batch or a dataloader
         assert (data != None and dataloader == None) or (data == None and
                                                          dataloader != None)
-
         assert (adv_data != None and adv_dataloader == None) or (adv_data == None and
                                                          adv_dataloader != None)
-        self.quantized_model = quantized_model.eval()  # make model is in evaluation model
-        self.original_model = original_model.eval()  # make model is in evaluation model
+        
+        self.model = model.eval()  # make model is in evaluation model
+        self.q_model = q_model.eval()
         self.criterion = criterion
-
+        self.attack_net = attack_net
+        
         if data != None:
             self.data = data
             self.full_dataset = False
         else:
             self.data = dataloader
             self.full_dataset = True
-
-        if data != None:
+            
+        if adv_data != None:
             self.adv_data = adv_data
             self.full_dataset = False
         else:
             self.adv_data = adv_dataloader
             self.full_dataset = True
-
-        
+            
+            
         if cuda:
             self.device = 'cuda'
         else:
@@ -76,32 +87,21 @@ class DDV_hessian():
         if not self.full_dataset:
             self.inputs, self.targets = self.data
             self.adv_inputs, self.adv_targets = self.adv_data
-            
-            #self.targets와 self.adv_targets가 다르면 오류를 출력한다.
-            assert (self.targets == self.adv_targets).all()
-            
             if self.device == 'cuda':
-                self.inputs, self.targets = self.inputs.cuda(
-                ), self.targets.cuda()
+                self.inputs = self.inputs.cuda()
                 self.adv_inputs = self.adv_inputs.cuda()
+                self.targets = self.targets.cuda()
 
             # if we only compute the Hessian information for a single batch data, we can re-use the gradients.
-            quantized_outputs = self.quantized_model(self.inputs, hessian_statistic=True)
-            adv_quantized_outputs = self.quantized_model(self.adv_inputs, hessian_statistic=True)
-            quantized_ddv = torch.matmul(quantized_outputs[0], adv_quantized_outputs[0].t())
-            # with torch.no_grad():
-
-            original_outputs = self.original_model(self.inputs, hessian_statistic=True)
-            adv_original_outputs = self.original_model(self.adv_inputs, hessian_statistic=True)
-            original_ddv = torch.matmul(original_outputs[0], adv_original_outputs[0].t())
-            
-            
+            outputs, _, _ = self.model(self.inputs,  hessian_statistic=True)
+            adv_outputs, _, _ = self.model(self.adv_inputs, hessian_statistic=True)
+            ddv = torch.matmul(outputs, adv_outputs.t())
             # loss = self.criterion(outputs[0], self.targets)
-            loss = self.criterion(quantized_ddv, original_ddv.detach())
+            loss = self.criterion(ddv, original_ddv)
             loss.backward(create_graph=True)
 
         # this step is used to extract the parameters from the model
-        params, names, gradsH = get_params_grad(self.quantized_model)
+        params, names, gradsH = get_params_grad(self.model)
         self.params = params
         self.names = names
         self.gradsH = gradsH  # gradient used for Hessian computation
@@ -113,27 +113,26 @@ class DDV_hessian():
 
         THv = [torch.zeros(p.size()).to(device) for p in self.params
               ]  # accumulate result
-        for (inputs, targets), (adv_inputs, adv_targets) in zip(self.data, self.adv_data):
-            self.quantized_model.zero_grad()
-            self.original_model.zero_grad()
+        for (inputs, targets) in self.data:
+            adv_inputs = self.attack_net.gen_adv_inputs(inputs, targets)
+            inputs, targets = inputs.cuda(), targets.cuda()
+            self.model.zero_grad()
             tmp_num_data = inputs.size(0)
-            quantized_outputs = self.quantized_model(inputs.to(device))
-            adv_quantized_outputs = self.quantized_model(adv_inputs.to(device))
-            quantized_ddv = torch.matmul(quantized_outputs, adv_quantized_outputs.t())
             
-            # with torch.no_grad():
-            original_outputs = self.original_model(inputs.to(device))
-            adv_original_outputs = self.original_model(adv_inputs.to(device))
-            original_ddv = torch.matmul(original_outputs, adv_original_outputs.t())
             
-            # loss = self.criterion(outputs, targets.to(device))
-            loss = self.criterion(quantized_ddv, original_ddv.detach())
+            outputs, _, _ = self.model(inputs)
+            adv_outputs, _, _ = self.model(adv_inputs)
+            ddv = torch.matmul(outputs, adv_outputs.t())
+            original_ddv = ddv.detach()
             
+            q_outputs, _, _ = self.q_model(inputs)
+            q_adv_outputs, _, _ = self.q_model(adv_inputs)
+            q_ddv = torch.matmul(q_outputs, q_adv_outputs.t())
+            
+            loss = self.criterion(q_ddv, original_ddv)
             loss.backward(create_graph=True)
-            
-            params, gradsH = get_params_grad(self.quantized_model)
-            self.quantized_model.zero_grad()
-            self.original_model.zero_grad()
+            params, gradsH = get_params_grad(self.model)
+            self.model.zero_grad()
             Hv = torch.autograd.grad(gradsH,
                                      params,
                                      grad_outputs=v,
@@ -148,7 +147,7 @@ class DDV_hessian():
         THv = [THv1 / float(num_data) for THv1 in THv]
         eigenvalue = group_product(THv, v).cpu().item()
         return eigenvalue, THv
-
+    
     def eigenvalues(self, maxIter=100, tol=1e-3, top_n=1):
         """
         compute the top_n eigenvalues using power iteration method
@@ -174,7 +173,7 @@ class DDV_hessian():
 
             for i in range(maxIter):
                 v = orthnormal(v, eigenvectors)
-                self.quantized_model.zero_grad()
+                self.model.zero_grad()
 
                 if self.full_dataset:
                     tmp_eigenvalue, Hv = self.dataloader_hv_product(v)
@@ -197,7 +196,7 @@ class DDV_hessian():
             computed_dim += 1
 
         return eigenvalues, eigenvectors
-
+    
     def trace(self, maxIter=150, tol=5e-3):
         """
         compute the trace of hessian using Hutchinson's method
@@ -214,7 +213,7 @@ class DDV_hessian():
 
             for i in range(maxIter):
                 
-                self.quantized_model.zero_grad()
+                self.model.zero_grad()
                 # v = [
                 #     torch.randint_like(p, high=2, device=device)
                 #     for p in self.params
@@ -247,80 +246,3 @@ class DDV_hessian():
                 print("The gap is ", abs(np.mean(trace_vhv) - trace) / (abs(trace) + 1e-6))
 
         return self.names, global_trace_vhv
-
-    def density(self, iter=100, n_v=1):
-        """
-        compute estimated eigenvalue density using stochastic lanczos algorithm (SLQ)
-        iter: number of iterations used to compute trace
-        n_v: number of SLQ runs
-        """
-
-        device = self.device
-        eigen_list_full = []
-        weight_list_full = []
-
-        for k in range(n_v):
-            v = [
-                torch.randint_like(p, high=2, device=device)
-                for p in self.params
-            ]
-            # generate Rademacher random variables
-            for v_i in v:
-                v_i[v_i == 0] = -1
-            v = normalization(v)
-
-            # standard lanczos algorithm initlization
-            v_list = [v]
-            w_list = []
-            alpha_list = []
-            beta_list = []
-            ############### Lanczos
-            for i in range(iter):
-                self.quantized_model.zero_grad()
-                w_prime = [torch.zeros(p.size()).to(device) for p in self.params]
-                if i == 0:
-                    if self.full_dataset:
-                        _, w_prime = self.dataloader_hv_product(v)
-                    else:
-                        w_prime = hessian_vector_product(
-                            self.gradsH, self.params, v)
-                    alpha = group_product(w_prime, v)
-                    alpha_list.append(alpha.cpu().item())
-                    w = group_add(w_prime, v, alpha=-alpha)
-                    w_list.append(w)
-                else:
-                    beta = torch.sqrt(group_product(w, w))
-                    beta_list.append(beta.cpu().item())
-                    if beta_list[-1] != 0.:
-                        # We should re-orth it
-                        v = orthnormal(w, v_list)
-                        v_list.append(v)
-                    else:
-                        # generate a new vector
-                        w = [torch.randn(p.size()).to(device) for p in self.params]
-                        v = orthnormal(w, v_list)
-                        v_list.append(v)
-                    if self.full_dataset:
-                        _, w_prime = self.dataloader_hv_product(v)
-                    else:
-                        w_prime = hessian_vector_product(
-                            self.gradsH, self.params, v)
-                    alpha = group_product(w_prime, v)
-                    alpha_list.append(alpha.cpu().item())
-                    w_tmp = group_add(w_prime, v, alpha=-alpha)
-                    w = group_add(w_tmp, v_list[-2], alpha=-beta)
-
-            T = torch.zeros(iter, iter).to(device)
-            for i in range(len(alpha_list)):
-                T[i, i] = alpha_list[i]
-                if i < len(alpha_list) - 1:
-                    T[i + 1, i] = beta_list[i]
-                    T[i, i + 1] = beta_list[i]
-            a_, b_ = torch.eig(T, eigenvectors=True)
-
-            eigen_list = a_[:, 0]
-            weight_list = b_[0, :]**2
-            eigen_list_full.append(list(eigen_list.cpu().numpy()))
-            weight_list_full.append(list(weight_list.cpu().numpy()))
-
-        return eigen_list_full, weight_list_full
