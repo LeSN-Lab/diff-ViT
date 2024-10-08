@@ -1,23 +1,30 @@
- * Restore Index: nothing, Prec@1 64.744 Prec@5 86.560 Time 157.782
- * Combination 1, Restore Indices: (1, 2, 9, 13, 25, 36), Prec@1 65.588 Prec@5 87.182 Time 159.676
- * Combination 2, Restore Indices: (3, 6, 12, 17, 28, 40), Prec@1 65.960 Prec@5 87.230 Time 158.413
- * Combination 3, Restore Indices: (4, 10, 15, 21, 29, 33), Prec@1 65.630 Prec@5 87.178 Time 156.685
- * Combination 4, Restore Indices: (5, 11, 19, 23, 31, 37), Prec@1 65.770 Prec@5 87.300 Time 159.264
- * Combination 5, Restore Indices: (0, 7, 14, 18, 26, 34), Prec@1 66.650 Prec@5 87.846 Time 156.648
- * Combination 6, Restore Indices: (2, 8, 16, 24, 32, 39), Prec@1 65.386 Prec@5 87.116 Time 157.811
- * Combination 7, Restore Indices: (1, 5, 13, 22, 27, 35), Prec@1 65.588 Prec@5 87.138 Time 158.725
- * Combination 8, Restore Indices: (3, 9, 17, 20, 30, 38), Prec@1 65.676 Prec@5 87.290 Time 158.310
- * Combination 9, Restore Indices: (4, 6, 15, 25, 33, 40), Prec@1 65.670 Prec@5 87.240 Time 162.132
- * Combination 10, Restore Indices: (0, 10, 18, 23, 28, 36), Prec@1 66.530 Prec@5 87.922 Time 155.437
- * Restore Index: nothing, Prec@1 64.744 Prec@5 86.560 Time 155.784
- * Combination 1, Restore Indices: (0, 3, 1, 2, 4, 15), Prec@1 67.804 Prec@5 88.518 Time 158.461
- * Combination 2, Restore Indices: (16, 31, 35, 5, 7, 12), Prec@1 65.590 Prec@5 87.244 Time 155.432
- * Combination 3, Restore Indices: (19, 23, 29, 49, 37, 11), Prec@1 65.830 Prec@5 87.340 Time 153.542
- * Restore Index: nothing, Prec@1 64.744 Prec@5 86.560 Time 157.425
- * Combination 1, Restore Indices: (21, 8, 41, 43, 17, 28), Prec@1 65.284 Prec@5 86.966 Time 153.613
- * Combination 2, Restore Indices: (46, 20, 38, 39, 12, 24), Prec@1 64.834 Prec@5 86.704 Time 163.675
- * Combination 3, Restore Indices: (14, 40, 24, 13, 30, 34), Prec@1 65.004 Prec@5 86.774 Time 155.910
- * Combination 4, Restore Indices: (5, 4, 16, 35, 23, 37), Prec@1 65.912 Prec@5 87.486 Time 152.589
- * Combination 5, Restore Indices: (3, 15, 31, 7, 40, 20), Prec@1 66.070 Prec@5 87.504 Time 155.248
- * Combination 6, Restore Indices: (11, 5, 19, 29, 40, 38), Prec@1 65.496 Prec@5 87.252 Time 153.894
- * Combination 7, Restore Indices: (32, 12, 21, 8, 39, 14), Prec@1 65.140 Prec@5 86.816 Time 167.370
+Combination 1, Restore Indices: (0, 3, 1, 2, 4, 15), Prec@1 67.804, Prec@5 88.518, Time 158.461
+Combination 2, Restore Indices: (0, 10, 18, 23, 28, 36), Prec@1 66.530, Prec@5 87.922, Time 155.437
+Combination 3, Restore Indices: (0, 7, 14, 18, 26, 34), Prec@1 66.650, Prec@5 87.846, Time 156.648
+Combination 4, Restore Indices: (3, 15, 31, 7, 40, 20), Prec@1 66.070, Prec@5 87.504, Time 155.248
+Combination 5, Restore Indices: (5, 4, 16, 35, 23, 37), Prec@1 65.912, Prec@5 87.486, Time 152.589
+Combination 6, Restore Indices: (19, 23, 29, 49, 37, 11), Prec@1 65.830, Prec@5 87.340, Time 153.542
+Combination 7, Restore Indices: (3, 9, 17, 20, 30, 38), Prec@1 65.676, Prec@5 87.290, Time 158.310
+Combination 8, Restore Indices: (5, 11, 19, 23, 31, 37), Prec@1 65.770, Prec@5 87.300, Time 159.264
+Combination 9, Restore Indices: (3, 6, 12, 17, 28, 40), Prec@1 65.960, Prec@5 87.230, Time 158.413
+Combination 10, Restore Indices: (4, 6, 15, 25, 33, 40), Prec@1 65.670, Prec@5 87.240, Time 162.132
+Combination 11, Restore Indices: (16, 31, 35, 5, 7, 12), Prec@1 65.590, Prec@5 87.244, Time 155.432
+Combination 12, Restore Indices: (11, 5, 19, 29, 40, 38), Prec@1 65.496, Prec@5 87.252, Time 153.894
+Combination 13, Restore Indices: (7, 15, 23, 31, 36, 40), Prec@1 65.726, Prec@5 87.260, Time 150.847
+Combination 14, Restore Indices: (1, 2, 9, 13, 25, 36), Prec@1 65.588, Prec@5 87.182, Time 159.676
+Combination 15, Restore Indices: (4, 10, 15, 21, 29, 33), Prec@1 65.630, Prec@5 87.178, Time 156.685
+Combination 16, Restore Indices: (1, 5, 13, 22, 27, 35), Prec@1 65.588, Prec@5 87.138, Time 158.725
+Combination 17, Restore Indices: (2, 8, 16, 24, 32, 39), Prec@1 65.386, Prec@5 87.116, Time 157.811
+Combination 18, Restore Indices: (5, 15, 23, 32, 38, 40), Prec@1 65.542, Prec@5 87.094, Time 155.128
+Combination 19, Restore Indices: (10, 19, 26, 31, 36, 39), Prec@1 65.306, Prec@5 87.010, Time 147.767
+Combination 20, Restore Indices: (5, 12, 19, 26, 33, 38), Prec@1 65.372, Prec@5 87.036, Time 152.498
+Combination 21, Restore Indices: (8, 16, 24, 32, 37, 39), Prec@1 65.272, Prec@5 86.926, Time 155.027
+Combination 22, Restore Indices: (11, 18, 27, 34, 37, 40), Prec@1 65.328, Prec@5 86.890, Time 151.868
+Combination 23, Restore Indices: (13, 20, 28, 35, 38, 40), Prec@1 65.202, Prec@5 86.860, Time 165.258
+Combination 24, Restore Indices: (9, 17, 25, 33, 36, 39), Prec@1 65.188, Prec@5 86.866, Time 152.816
+Combination 25, Restore Indices: (12, 21, 29, 34, 37, 40), Prec@1 65.172, Prec@5 86.872, Time 161.148
+Combination 26, Restore Indices: (21, 8, 41, 43, 17, 28), Prec@1 65.284, Prec@5 86.966, Time 153.613
+Combination 27, Restore Indices: (46, 20, 38, 39, 12, 24), Prec@1 64.834, Prec@5 86.704, Time 163.675
+Combination 28, Restore Indices: (14, 40, 24, 13, 30, 34), Prec@1 65.004, Prec@5 86.774, Time 155.910
+Combination 29, Restore Indices: (6, 14, 22, 30, 35, 40), Prec@1 65.106, Prec@5 86.780, Time 154.826
+Restore Index: nothing, Prec@1 64.744, Prec@5 86.560, Time 155.784
