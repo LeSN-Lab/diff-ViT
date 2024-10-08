@@ -26,6 +26,8 @@ import numpy as np
 from pyhessian.utils import group_product, group_add, normalization, get_params_grad, hessian_vector_product, orthnormal
 
 
+
+
 class hessian():
     """
     The class used to compute :
