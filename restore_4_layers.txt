@@ -1,0 +1,6 @@
+ * Restore Index: nothing, Prec@1 64.744 Prec@5 86.560 Time 155.098
+ *Restore Indices: (9, 15, 23, 37), Prec@1 65.476 Prec@5 87.026 Time 156.704
+ *Restore Indices: (3, 13, 16, 25), Prec@1 65.666 Prec@5 87.290 Time 151.300
+ *Restore Indices: (10, 20, 30, 40), Prec@1 64.758 Prec@5 86.654 Time 155.477
+ *Restore Indices: (5, 6, 40, 39), Prec@1 65.002 Prec@5 86.828 Time 157.863
+ *Restore Indices: (40, 36, 38, 10), Prec@1 64.918 Prec@5 86.712 Time 151.133
