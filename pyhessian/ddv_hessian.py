@@ -34,6 +34,8 @@ from pyhessian.utils import (
 )
 
 
+
+
 class DDVHessian:
     """
     The class used to compute :
@@ -143,7 +145,7 @@ class DDVHessian:
                 loss += self.criterion(ddv_quantized, ddv_original)
 
             # loss = self.criterion(outputs[0], self.targets)
-            loss = self.criterion(ddv, original_ddv)
+            # loss = self.criterion(ddv, original_ddv)
             loss.backward(create_graph=True)
 
         # this step is used to extract the parameters from the model
