@@ -34,8 +34,6 @@ from pyhessian.utils import (
 )
 
 
-
-
 class DDVHessian:
     """
     The class used to compute :
@@ -55,6 +53,7 @@ class DDVHessian:
         dataloader=None,
         adv_dataloader=None,
         attack_net=None,
+        layer_indices=None,
         cuda=True,
     ):
         """
@@ -99,7 +98,7 @@ class DDVHessian:
             self.device = "cuda"
         else:
             self.device = "cpu"
-
+        self.layer_indices = layer_indices
         # pre-processing for single batch case to simplify the computation.
         if not self.full_dataset:
             self.inputs, self.targets = self.data
@@ -110,11 +109,22 @@ class DDVHessian:
             self.targets = self.targets.to(self.device)
 
             # Get activations from all layers for both inputs and adversarial inputs
-            outputs_list = get_activations(self.inputs, self.model, None, self.device)
-            adv_outputs_list = get_activations(
-                self.adv_inputs, self.model, None, self.device
+            outputs_list, layer_info = get_activations(
+                self.inputs,
+                self.model,
+                None,
+                self.device,
+                layer_indices=self.layer_indices,
+            )
+            adv_outputs_list, _ = get_activations(
+                self.adv_inputs,
+                self.model,
+                None,
+                self.device,
+                layer_indices=self.layer_indices,
             )
 
+            # Compute original DDV list
             original_ddv_list = []
 
             for outputs, adv_outputs in zip(outputs_list, adv_outputs_list):
@@ -124,11 +134,19 @@ class DDVHessian:
                 original_ddv_list.append(ddv.detach())
 
             # Get activations from the quantized model
-            q_outputs_list = get_activations(
-                self.inputs, self.q_model, None, self.device
+            q_outputs_list, _ = get_activations(
+                self.inputs,
+                self.q_model,
+                None,
+                self.device,
+                layer_indices=self.layer_indices,
             )
-            q_adv_outputs_list = get_activations(
-                self.adv_inputs, self.q_model, None, self.device
+            q_adv_outputs_list, _ = get_activations(
+                self.adv_inputs,
+                self.q_model,
+                None,
+                self.device,
+                layer_indices=self.layer_indices,
             )
 
             # Compute DDV list for the quantized model
@@ -252,6 +270,10 @@ class DDVHessian:
         global_trace_vhv = []
         device = self.device
         for i_grad, i_param, module_name in zip(self.gradsH, self.params, self.names):
+            # Skip parameters with zero gradients (they do not influence the loss)
+            if i_grad is None or torch.all(i_grad == 0):
+                continue
+
             trace_pair = {"layer_name": " ", "trace": 0}
             trace_pair["layer_name"] = module_name
             trace_vhv = []
