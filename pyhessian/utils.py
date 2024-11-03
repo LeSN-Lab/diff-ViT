@@ -77,11 +77,11 @@ def get_params_grad(model, nameSelected=None):
 
         # Skip certain layers based on name
         if (
-                "norm" in name
-                or "bias" in name
-                or "cls_token" in name
-                or "pos_embed" in name
-                or "patch_embed" in name
+            "norm" in name
+            or "bias" in name
+            or "cls_token" in name
+            or "pos_embed" in name
+            or "patch_embed" in name
         ):
             continue
 
@@ -91,7 +91,7 @@ def get_params_grad(model, nameSelected=None):
         grads.append(0.0 if param.grad is None else param.grad + 0.0)
 
         # If we found the target layer, stop collecting parameters
-        if nameSelected is not None and name == nameSelected:
+        if nameSelected is not None and nameSelected in name:
             found_target = True
             break
 

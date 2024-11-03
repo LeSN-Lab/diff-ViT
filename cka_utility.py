@@ -36,7 +36,7 @@ def get_activations(
 
     from models.vit_fquant import Attention, Mlp
 
-    def hook_return(index):
+    def hook_return(index, name):
         def hook(module, input, output):
             # Only collect activations if index is in layer_indices (if specified)
             relative_index = len(layer_info)
@@ -51,7 +51,7 @@ def get_activations(
                 {
                     "relative_index": relative_index,
                     "absolute_index": index,
-                    "name": module.__class__.__name__,
+                    "name": name,
                     "layer_type": type(module),
                     "path": get_module_path(module),
                 }
@@ -62,13 +62,13 @@ def get_activations(
     hooks = []
 
     if bit_config is None:
-        for index, layer in enumerate(model.modules()):
+        for index, (name, layer) in enumerate(model.named_modules()):
             if type(layer) in [QConv2d, QLinear, Attention, Mlp]:
-                hooks.append(layer.register_forward_hook(hook_return(index)))
+                hooks.append(layer.register_forward_hook(hook_return(index, name)))
     else:
-        for index, layer in enumerate(model.modules()):
+        for index, (name, layer) in enumerate(model.named_modules()):
             if type(layer) in [QConv2d, QLinear]:
-                hooks.append(layer.register_forward_hook(hook_return(index)))
+                hooks.append(layer.register_forward_hook(hook_return(index, name)))
     # 모델을 통해 이미지를 전달합니다.
     images = images.to(device)
     _ = model(images, bit_config=bit_config, plot=False)
@@ -100,7 +100,6 @@ def get_activations(
 
         activations = filtered_activations
         layer_info = filtered_layer_info
-    
 
     if normalize_act:
         activations = [normalize_activations(act) for act in activations]
