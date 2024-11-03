@@ -168,6 +168,10 @@ class DDVHessian:
 
         # this step is used to extract the parameters from the model
         params, names, gradsH = get_params_grad(self.model)
+        # gradsH가 None인지 확인
+        if any(g is None for g in gradsH):
+            raise ValueError("Some gradients are None")
+
         self.params = params
         self.names = names
         self.gradsH = gradsH  # gradient used for Hessian computation
@@ -307,6 +311,9 @@ class DDVHessian:
                     break
                 else:
                     trace = np.mean(trace_vhv)
+                for param in self.model.parameters():
+                    if param.grad is not None:
+                        param.grad = None
             if trace_pair["trace"] == 0:
                 trace_pair["trace"] = trace
                 global_trace_vhv.append(trace)

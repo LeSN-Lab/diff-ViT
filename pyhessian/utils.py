@@ -1,4 +1,4 @@
-#*
+# *
 # @file Different utility functions
 # Copyright (c) Zhewei Yao, Amir Gholami
 # All rights reserved.
@@ -16,7 +16,7 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with PyHessian.  If not, see <http://www.gnu.org/licenses/>.
-#*
+# *
 
 import torch
 import math
@@ -69,11 +69,17 @@ def get_params_grad(model):
     for name, param in model.named_parameters():
         if not param.requires_grad:
             continue
-        if 'norm' in name or 'bias' in name or 'cls_token' in name or 'pos_embed' in name or 'patch_embed' in name:
+        if (
+            "norm" in name
+            or "bias" in name
+            or "cls_token" in name
+            or "pos_embed" in name
+            or "patch_embed" in name
+        ):
             continue
         params.append(param)
         names.append(name)
-        grads.append(0. if param.grad is None else param.grad + 0.)
+        grads.append(0.0 if param.grad is None else param.grad + 0.0)
     # print(len(params))
     # print(len(grads))
     # print(len(names))
@@ -88,12 +94,14 @@ def hessian_vector_product(gradsH, params, v):
     params is the corresponding variables,
     v is the vector.
     """
-    hv = torch.autograd.grad(gradsH,
-                             params,
-                             grad_outputs=v,
-                             only_inputs=True,
-                             retain_graph=True)
-    return hv
+    try:
+        hv = torch.autograd.grad(
+            gradsH, params, grad_outputs=v, only_inputs=True, retain_graph=True
+        )
+        return hv
+    except RuntimeError as e:
+        print("Error in hessian_vector_product", e)
+        return None
 
 
 def orthnormal(w, v_list):
