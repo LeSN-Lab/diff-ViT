@@ -58,17 +58,24 @@ def normalization(v):
     return v
 
 
-def get_params_grad(model):
+def get_params_grad(model, target_layer_idx=None):
     """
-    get model parameters and corresponding gradients
+    get model parameters and corresponding gradients up to the target layer
+    Args:
+        model: the neural network model
+        target_layer_idx: the index of the target layer (None means all layers)
     """
     names = []
     params = []
     grads = []
-    # for param in model.parameters():
+
+    current_layer = 0
     for name, param in model.named_parameters():
+        # Skip if parameter doesn't require gradient
         if not param.requires_grad:
             continue
+
+        # Skip certain layers based on name
         if (
             "norm" in name
             or "bias" in name
@@ -77,13 +84,21 @@ def get_params_grad(model):
             or "patch_embed" in name
         ):
             continue
+
+        # Extract block number from parameter name
+        if "blocks." in name:
+            block_num = int(name.split("blocks.")[1].split(".")[0])
+
+            # Skip if we've passed the target layer
+            if target_layer_idx is not None and block_num > target_layer_idx:
+                continue
+
         params.append(param)
         names.append(name)
         grads.append(0.0 if param.grad is None else param.grad + 0.0)
-    # print(len(params))
-    # print(len(grads))
-    # print(len(names))
-    # print('')
+
+        current_layer += 1
+
     return params, names, grads
 
 

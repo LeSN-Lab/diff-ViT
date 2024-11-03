@@ -167,7 +167,8 @@ class DDVHessian:
             loss.backward(create_graph=True)
 
         # this step is used to extract the parameters from the model
-        params, names, gradsH = get_params_grad(self.model)
+        target_layer_idx = layer_indices if layer_indices else None
+        params, names, gradsH = get_params_grad(self.model, target_layer_idx)
         # gradsH가 None인지 확인
         if any(g is None for g in gradsH):
             raise ValueError("Some gradients are None")

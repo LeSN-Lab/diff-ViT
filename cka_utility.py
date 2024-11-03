@@ -93,7 +93,7 @@ def get_activations(
         filtered_activations = []
         filtered_layer_info = []
         for i, info in enumerate(layer_info):
-            if info["relative_index"] in layer_indices:
+            if info["relative_index"] == layer_indices:
                 filtered_activations.append(activations[i])
                 filtered_layer_info.append(info)
         activations = filtered_activations
