@@ -116,7 +116,11 @@ class DDVHessian:
                 self.device,
                 layer_indices=self.layer_indices,
             )
-            adv_outputs_list, _ = get_activations(
+            self.nameSelected = ""
+            if layer_indices is not None:
+                self.nameSelected = layer_info[0]['name']
+
+            adv_outputs_list, adv_layer_info = get_activations(
                 self.adv_inputs,
                 self.model,
                 None,
@@ -134,14 +138,15 @@ class DDVHessian:
                 original_ddv_list.append(ddv.detach())
 
             # Get activations from the quantized model
-            q_outputs_list, _ = get_activations(
+
+            q_outputs_list, q_output_layer_info = get_activations(
                 self.inputs,
                 self.q_model,
                 None,
                 self.device,
                 layer_indices=self.layer_indices,
             )
-            q_adv_outputs_list, _ = get_activations(
+            q_adv_outputs_list, q_adv_output_layer_info = get_activations(
                 self.adv_inputs,
                 self.q_model,
                 None,
@@ -157,18 +162,19 @@ class DDVHessian:
                 q_ddv = torch.matmul(q_outputs_flat, q_adv_outputs_flat.t())
                 q_ddv_list.append(q_ddv)
 
-                # Compute the loss as the sum over all layers
-            loss = 0
+            loss = torch.tensor(0.0, requires_grad=True, device=self.device)
+
+            
             for ddv_original, ddv_quantized in zip(original_ddv_list, q_ddv_list):
-                loss += self.criterion(ddv_quantized, ddv_original)
+                loss = loss +  self.criterion(ddv_quantized, ddv_original)
 
             # loss = self.criterion(outputs[0], self.targets)
             # loss = self.criterion(ddv, original_ddv)
             loss.backward(create_graph=True)
 
         # this step is used to extract the parameters from the model
-        target_layer_idx = layer_indices if layer_indices else None
-        params, names, gradsH = get_params_grad(self.model, target_layer_idx)
+
+        params, names, gradsH = get_params_grad(self.model, self.nameSelected)
         # gradsH가 None인지 확인
         if any(g is None for g in gradsH):
             raise ValueError("Some gradients are None")

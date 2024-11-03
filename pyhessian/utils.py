@@ -58,18 +58,18 @@ def normalization(v):
     return v
 
 
-def get_params_grad(model, target_layer_idx=None):
+def get_params_grad(model, nameSelected=None):
     """
-    get model parameters and corresponding gradients up to the target layer
+    get model parameters and corresponding gradients up to the selected layer
     Args:
         model: the neural network model
-        target_layer_idx: the index of the target layer (None means all layers)
+        nameSelected: the name of the target layer (None means all layers)
     """
     names = []
     params = []
     grads = []
 
-    current_layer = 0
+    found_target = False
     for name, param in model.named_parameters():
         # Skip if parameter doesn't require gradient
         if not param.requires_grad:
@@ -77,27 +77,26 @@ def get_params_grad(model, target_layer_idx=None):
 
         # Skip certain layers based on name
         if (
-            "norm" in name
-            or "bias" in name
-            or "cls_token" in name
-            or "pos_embed" in name
-            or "patch_embed" in name
+                "norm" in name
+                or "bias" in name
+                or "cls_token" in name
+                or "pos_embed" in name
+                or "patch_embed" in name
         ):
             continue
 
-        # Extract block number from parameter name
-        if "blocks." in name:
-            block_num = int(name.split("blocks.")[1].split(".")[0])
-
-            # Skip if we've passed the target layer
-            if target_layer_idx is not None and block_num > target_layer_idx:
-                continue
-
+        # Add parameters until we find the target layer
         params.append(param)
         names.append(name)
         grads.append(0.0 if param.grad is None else param.grad + 0.0)
 
-        current_layer += 1
+        # If we found the target layer, stop collecting parameters
+        if nameSelected is not None and name == nameSelected:
+            found_target = True
+            break
+
+    if nameSelected is not None and not found_target:
+        print(f"Warning: Target layer {nameSelected} not found in model")
 
     return params, names, grads
 

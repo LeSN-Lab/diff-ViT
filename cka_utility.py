@@ -92,12 +92,15 @@ def get_activations(
     if layer_indices is not None:
         filtered_activations = []
         filtered_layer_info = []
+
         for i, info in enumerate(layer_info):
             if info["relative_index"] == layer_indices:
                 filtered_activations.append(activations[i])
                 filtered_layer_info.append(info)
+
         activations = filtered_activations
         layer_info = filtered_layer_info
+    
 
     if normalize_act:
         activations = [normalize_activations(act) for act in activations]
