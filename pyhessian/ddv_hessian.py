@@ -309,7 +309,7 @@ class DDVHessian:
         device = self.device
         for i_grad, i_param, module_name in zip(self.gradsH, self.params, self.names):
             # Skip parameters with zero gradients (they do not influence the loss)
-            if i_grad is None or torch.all(i_grad == 0):
+            if i_grad is None:
                 continue
 
             trace_pair = {"layer_name": " ", "trace": 0}

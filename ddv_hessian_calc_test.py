@@ -202,3 +202,29 @@ for i, (inputs, labels) in enumerate(train_loader):
         # 에러 발생 시에도 메모리 정리
         torch.cuda.empty_cache()
         raise e
+# Process the trace_list as needed
+
+
+new_global_hessian_track = []
+for i in range(int(len(trace_list))):
+    hessian_track = trace_list[i]
+    hessian_track = [abs(x) for x in hessian_track]
+    min_h = min(hessian_track)
+    max_h = max(hessian_track)
+    averaged_hessian_track = [(elem-min_h)/(max_h-min_h) for elem in hessian_track]
+    new_global_hessian_track.append(averaged_hessian_track)
+
+
+# min_hessian = []
+# max_hessian = []
+layer_num = len(trace_list[0])
+mean_hessian = []
+
+for i in range(layer_num):
+    new_hessian = [sample[i] for sample in new_global_hessian_track]
+    mean_hessian.append(sum(new_hessian)/len(new_hessian))
+    # min_hessian.append(min(new_hessian))
+    # max_hessian.append(max(new_hessian))
+
+# print(name)
+print('\n***Trace: ', mean_hessian)
