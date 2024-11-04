@@ -53,7 +53,7 @@ parser.add_argument('--val-batchsize',
                     type=int,
                     help='batchsize of validation set')
 parser.add_argument('--num-workers',
-                    default=16,
+                    default=4,
                     type=int,
                     help='number of data loading workers (default: 16)')
 parser.add_argument('--device', default='cuda', type=str, help='device')
@@ -161,22 +161,44 @@ batch_num = 10
 trace_list = []
 not_quantized_model.eval()
 for i, (inputs, labels) in enumerate(train_loader):
-    adv_inputs = not_quantized_attack_net.gen_adv_inputs(inputs, labels)
-    inputs, targets = inputs.cuda(), labels.cuda()
+    try:
+        adv_inputs = not_quantized_attack_net.gen_adv_inputs(inputs, labels)
+        inputs, targets = inputs.cuda(), labels.cuda()
 
-    # Initialize the DDVHessian class with selected layers
-    hessian_comp = DDVHessian(
-        model=not_quantized_model,
-        q_model=int4_model,
-        criterion=torch.nn.MSELoss(),
-        data=(inputs, labels),
-        adv_data=(adv_inputs, labels),
-        attack_net=not_quantized_attack_net,
-        layer_indices=selectedIndex,
-        cuda=args.device
-    )
-    print(f"Processing batch {i + 1}/{batch_num}")
-    name, trace = hessian_comp.trace()
-    trace_list.append(trace)
-    if i == batch_num - 1:
-        break
+        # Initialize the DDVHessian class with selected layers
+        hessian_comp = DDVHessian(
+            model=not_quantized_model,
+            q_model=int4_model,
+            criterion=torch.nn.MSELoss(),
+            data=(inputs, labels),
+            adv_data=(adv_inputs, labels),
+            attack_net=not_quantized_attack_net,
+            layer_indices=selectedIndex,
+            cuda=args.device
+        )
+        print(f"Processing batch {i + 1}/{batch_num}")
+        name, trace = hessian_comp.trace()
+        trace_list.append(trace)
+        # 명시적인 메모리 정리
+        del hessian_comp
+        del inputs
+        del labels
+        del adv_inputs
+        del name
+        del trace
+
+        # 모델의 그래디언트 정리
+        not_quantized_model.zero_grad()
+        int4_model.zero_grad()
+
+        # CUDA 캐시 비우기
+        torch.cuda.empty_cache()
+
+        if i == batch_num - 1:
+            break
+
+    except RuntimeError as e:
+        print(f"Error occurred: {e}")
+        # 에러 발생 시에도 메모리 정리
+        torch.cuda.empty_cache()
+        raise e

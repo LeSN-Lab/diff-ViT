@@ -162,19 +162,40 @@ class DDVHessian:
                 q_ddv = torch.matmul(q_outputs_flat, q_adv_outputs_flat.t())
                 q_ddv_list.append(q_ddv)
 
+
+            # print("Before loss calculation:")
+            # for name, param in self.q_model.named_parameters():
+            #     print(f"{name}: requires_grad={param.requires_grad}")
+
             loss = torch.tensor(0.0, requires_grad=True, device=self.device)
 
             
             for ddv_original, ddv_quantized in zip(original_ddv_list, q_ddv_list):
-                loss = loss +  self.criterion(ddv_quantized, ddv_original)
+                # ddv_original은 detach()된 상태 (상수)
+                # ddv_quantized는 계산 그래프 유지
+                # print(f"ddv_original requires_grad: {ddv_original.requires_grad}")
+                # print(f"ddv_quantized requires_grad: {ddv_quantized.requires_grad}")
+                # print(f"ddv_quantized grad_fn: {ddv_quantized.grad_fn}")
+                
+                current_loss = self.criterion(ddv_quantized, ddv_original)
+                # print(f"current_loss requires_grad: {current_loss.requires_grad}")
+                # print(f"current_loss grad_fn: {current_loss.grad_fn}")
+                
+                loss = loss + current_loss
+            # print(f"Final loss requires_grad: {loss.requires_grad}")
+            # print(f"Final loss grad_fn: {loss.grad_fn}")
 
             # loss = self.criterion(outputs[0], self.targets)
             # loss = self.criterion(ddv, original_ddv)
             loss.backward(create_graph=True)
+                # backward 후 그래디언트 상태 확인
+            # print("\nAfter backward:")
+            # for name, param in self.q_model.named_parameters():
+            #     print(f"{name}: requires_grad={param.requires_grad}, has_grad={param.grad is not None}")
 
         # this step is used to extract the parameters from the model
 
-        params, names, gradsH = get_params_grad(self.model, self.nameSelected)
+        params, names, gradsH = get_params_grad(self.q_model, self.nameSelected)
         # gradsH가 None인지 확인
         if any(g is None for g in gradsH):
             raise ValueError("Some gradients are None")
@@ -182,6 +203,12 @@ class DDVHessian:
         self.params = params
         self.names = names
         self.gradsH = gradsH  # gradient used for Hessian computation
+        # 계산 후 중간 결과 정리
+        del outputs_list
+        del adv_outputs_list
+        del q_outputs_list
+        del q_adv_outputs_list
+        torch.cuda.empty_cache()
 
     def dataloader_hv_product(self, v):
 
